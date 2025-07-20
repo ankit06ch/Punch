@@ -48,11 +48,11 @@ export default function Profile() {
       {/* Top bar */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => router.push('/authenticated_tabs/find-friends')}>
-          <Feather name="user-plus" size={24} color="white" />
+          <Feather name="user-plus" size={24} color="orange" />
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => setModalVisible(true)}>
-          <Feather name="menu" size={24} color="white" />
+          <Feather name="menu" size={24} color="orange" />
         </TouchableOpacity>
       </View>
 

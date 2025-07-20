@@ -4,19 +4,21 @@
     "slug": "punch",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/Punch0logos/Background_Logo/orange_bg_logo.png",
+    "icon": "./assets/Punch_Logos/Background_Logo/orange_bg_logo.png",
     "scheme": "punch",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ankitc.punch"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.ankitc.punch"
     },
     "web": {
       "bundler": "metro",
