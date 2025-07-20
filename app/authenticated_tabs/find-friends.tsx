@@ -67,7 +67,7 @@ export default function FindFriendsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'black', padding: 16 },
+  container: { flex: 1, backgroundColor: 'white', padding: 16 },
   input: {
     borderWidth: 1,
     borderColor: '#ccc',
