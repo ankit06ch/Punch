@@ -4,7 +4,7 @@
     "slug": "punch",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/Punch0logos/Background_Logo/orange_bg_logo.png",
     "scheme": "punch",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
