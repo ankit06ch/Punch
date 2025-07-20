@@ -29,7 +29,7 @@ export default function Profile() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      router.replace('/splash');
+      router.replace('../unauthenticated_tabs/splash');
     } catch (error) {
       console.error('Logout failed:', error);
     }
@@ -47,7 +47,7 @@ export default function Profile() {
     <View style={styles.container}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.push('/tabs/find-friends')}>
+        <TouchableOpacity onPress={() => router.push('/authenticated_tabs/find-friends')}>
           <Feather name="user-plus" size={24} color="white" />
         </TouchableOpacity>
 

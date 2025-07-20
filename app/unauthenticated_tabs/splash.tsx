@@ -7,7 +7,7 @@ export default function SplashScreen() {
 
   useEffect(() => {
     const timeout = setTimeout(() => {
-      router.replace('/onboarding');
+      router.replace('../unauthenticated_tabs/onboarding');
     }, 1000);
 
     return () => clearTimeout(timeout);
@@ -15,7 +15,7 @@ export default function SplashScreen() {
 
   return (
     <View style={styles.container}>
-      <Image source={require('../assets/Punch_Logos/Punch_T/black_logo.png')} style={styles.logo} />
+      <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={styles.logo} />
     </View>
   );
 }

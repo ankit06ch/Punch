@@ -2,7 +2,7 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, ScrollView } from 'react-native';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth, db } from '../firebase/config';
+import { auth, db } from '../../firebase/config';
 import { useRouter } from 'expo-router';
 import { doc, setDoc } from 'firebase/firestore';
 
@@ -71,7 +71,7 @@ export default function SignupScreen() {
         followingUids: [],
       });
 
-      router.replace('/tabs/home');
+      router.replace('../authenticated_tabs/home');
     } catch (err: any) {
         console.error('Signup error:', err);
         const friendlyMessage = getFriendlyErrorMessage(err.code);
@@ -120,7 +120,7 @@ export default function SignupScreen() {
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Button title={loading ? 'Signing up...' : 'Sign Up'} onPress={handleSignup} disabled={loading} />
-      <Button title="Already have an account? Login" onPress={() => router.push('/login')} />
+      <Button title="Already have an account? Login" onPress={() => router.push('../unauthenticated_tabs/login')} />
     </ScrollView>
   );
 }

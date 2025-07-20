@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator } from 'react-native';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase/config';
+import { auth } from '../../firebase/config';
 import { useRouter } from 'expo-router';
 
 export default function LoginScreen() {
@@ -29,7 +29,7 @@ export default function LoginScreen() {
     setError('');
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.replace('/');
+      router.replace('../authenticated_tabs/home');
     } catch (err: any) {
       const friendlyMessage = getFriendlyErrorMessage(err.code);
       setError(friendlyMessage);
@@ -64,7 +64,7 @@ export default function LoginScreen() {
       ) : (
         <>
           <Button title="Login" onPress={handleLogin} />
-          <Button title="Don't have an account? Sign Up" onPress={() => router.push('/signup')} />
+          <Button title="Don't have an account? Sign Up" onPress={() => router.push('../unauthenticated_tabs/signup')} />
         </>
       )}
     </View>

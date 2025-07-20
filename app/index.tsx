@@ -10,12 +10,12 @@ export default function Index() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log("AUTH STATE CHANGED:", user); // ✅ See what's going on
+      console.log("AUTH STATE CHANGED:", user);
   
       if (user) {
-        router.replace('/tabs/home');
+        router.replace('../authenticated_tabs/home');
       } else {
-        router.replace('/splash');
+        router.replace('../unauthenticated_tabs/splash');
       }
       setLoading(false);
     });

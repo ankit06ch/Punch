@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../firebase/config';
+import { auth } from '../../firebase/config';
 import { useRouter } from 'expo-router';
 
 export default function ResetPasswordScreen() {
@@ -13,7 +13,7 @@ export default function ResetPasswordScreen() {
     try {
       await sendPasswordResetEmail(auth, email);
       Alert.alert('Email Sent', 'Check your inbox for a reset link.');
-      router.push('/login');
+      router.push('../login');
     } catch (err: any) {
       if (err.code === 'auth/user-not-found') {
         setMessage('No account found with this email.');

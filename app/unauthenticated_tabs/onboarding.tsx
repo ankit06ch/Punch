@@ -14,7 +14,7 @@ export default function OnboardingScreen() {
 
   const next = () => {
     if (index < slides.length - 1) setIndex(index + 1);
-    else router.replace('/login');
+    else router.replace('../unauthenticated_tabs/login');
   };
 
   return (
