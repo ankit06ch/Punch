@@ -1,111 +1,136 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import PassKit, { AddPassButton } from 'react-native-passkit-wallet';
+import React, { useState, useRef } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  Dimensions,
+  Animated,
+  TouchableOpacity,
+  StyleSheet,
+} from 'react-native';
+import styles from '../styles/walletStyles';
+
+const { width } = Dimensions.get('window');
+const CARD_WIDTH = width * 0.8;
+const CARD_SPACING = width * 0.1;
+
+const punchCardsData = [
+  { id: '1', businessName: 'Coffee Shop', punches: 4, total: 10 },
+  { id: '2', businessName: 'Bakery', punches: 7, total: 12 },
+  { id: '3', businessName: 'Bookstore', punches: 3, total: 8 },
+];
 
 export default function Wallet() {
-  const punches = 7;
-  const total = 10;
+  const [cards, setCards] = useState(punchCardsData);
 
-  const handleAddPass = async () => {
-    try {
-      await PassKit.addPassFromUrl('https://yourserver.com/path/to/your.pkpass'); // Replace with your hosted pass URL
-    } catch (error) {
-      console.error('Failed to add pass:', error);
-    }
+  const handlePunchToggle = (cardId: string, punchIndex: number) => {
+    setCards((prevCards) =>
+      prevCards.map((card) => {
+        if (card.id === cardId) {
+          let newPunches = card.punches;
+          if (punchIndex < card.punches) {
+            // If tapped on an already punched one, decrease punches
+            newPunches = punchIndex;
+          } else {
+            // If tapped on next or further, increase punches up to total
+            newPunches = punchIndex + 1 > card.total ? card.total : punchIndex + 1;
+          }
+          return { ...card, punches: newPunches };
+        }
+        return card;
+      })
+    );
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>My Punch Card</Text>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Loyalty Card</Text>
-        <View style={styles.punchRow}>
-          {Array.from({ length: total }).map((_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.punch,
-                index < punches ? styles.filledPunch : styles.emptyPunch,
-              ]}
-            />
-          ))}
-        </View>
-        <Text style={styles.cardSubtitle}>{punches} / {total} punches</Text>
-      </View>
-
+    <View style={styles.container}>
+      <Text style={styles.title}>My Punch Cards</Text>
+      <FlatList
+        data={cards}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={CARD_WIDTH + CARD_SPACING / 2}
+        decelerationRate="fast"
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingHorizontal: CARD_SPACING / 2 }}
+        renderItem={({ item }) => (
+          <PunchCard
+            businessName={item.businessName}
+            punches={item.punches}
+            total={item.total}
+            onPunchToggle={(index) => handlePunchToggle(item.id, index)}
+          />
+        )}
+      />
       <View style={styles.addPassContainer}>
-        <AddPassButton onPress={handleAddPass} style={styles.pkAddPassButton} />
+        <Text style={{ color: '#aaa', fontSize: 16 }}>Add to Apple Wallet coming soon</Text>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#fff',
-    padding: 20,
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#fb7a20',
-    marginBottom: 20,
-  },
-  card: {
-    backgroundColor: '#fff4ed',
-    borderRadius: 20,
-    padding: 24,
-    width: '100%',
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    marginBottom: 30,
-  },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 16,
-    color: '#333',
-  },
-  cardSubtitle: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#555',
-  },
-  punchRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  punch: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    margin: 5,
-    borderWidth: 1.5,
-    borderColor: '#fb7a20',
-  },
-  filledPunch: {
-    backgroundColor: '#fb7a20',
-  },
-  emptyPunch: {
-    backgroundColor: '#fff',
-  },
-  addPassContainer: {
-    marginTop: 20,
-    width: '100%',
-    alignItems: 'center',
-  },
-  pkAddPassButton: {
-    width: 200,
-    height: 44,
-  },
-});
+function PunchCard({
+  businessName,
+  punches,
+  total,
+  onPunchToggle,
+}: {
+  businessName: string;
+  punches: number;
+  total: number;
+  onPunchToggle: (index: number) => void;
+}) {
+  const punchArray = Array.from({ length: total });
+  const scaleAnimations = useRef(punchArray.map(() => new Animated.Value(0))).current;
+
+  React.useEffect(() => {
+    // Animate scale of punched circles on mount and punches change
+    punchArray.forEach((_, i) => {
+      Animated.timing(scaleAnimations[i], {
+        toValue: i < punches ? 1 : 0,
+        duration: 350,
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [punches]);
+
+  return (
+    <View style={styles.cardContainer}>
+      <Text style={styles.businessName}>{businessName}</Text>
+      <View style={styles.punchRow}>
+        {punchArray.map((_, index) => {
+          const isFilled = index < punches;
+          const isNext = index === punches && punches !== total;
+
+          return (
+            <TouchableOpacity
+              key={index}
+              onPress={() => onPunchToggle(index)}
+              activeOpacity={0.8}
+            >
+              <Animated.View
+                style={[
+                  styles.punch,
+                  isFilled ? styles.filledPunch : styles.emptyPunch,
+                  isNext ? styles.nextPunch : null,
+                  {
+                    transform: [{ scale: scaleAnimations[index].interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.5, 1],
+                    }) }],
+                    shadowOpacity: isFilled ? 0.4 : 0,
+                    shadowRadius: isFilled ? 6 : 0,
+                    shadowOffset: { width: 0, height: 3 },
+                  },
+                ]}
+              />
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <Text style={styles.cardSubtitle}>
+        {punches} / {total} punches
+      </Text>
+    </View>
+  );
+}

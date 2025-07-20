@@ -47,7 +47,7 @@ export default function Profile() {
     <View style={styles.container}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.push('/authenticated_tabs/find-friends')}>
+        <TouchableOpacity onPress={() => router.push('/authenticated_tabs/screens/_find-friends')}>
           <Feather name="user-plus" size={24} color="orange" />
         </TouchableOpacity>
 

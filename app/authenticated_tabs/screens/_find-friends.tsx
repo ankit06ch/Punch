@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+import { db } from '../../../firebase/config';
 
 export default function FindFriendsScreen() {
   const [search, setSearch] = useState('');
