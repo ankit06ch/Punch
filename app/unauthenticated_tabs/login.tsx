@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator, Image, TouchableOpacity } from 'react-native';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../../firebase/config';
 import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -39,47 +40,83 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Login</Text>
-      <TextInput
-        placeholder="Email"
-        style={styles.input}
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        autoCapitalize="none"
-        editable={!loading}
-      />
-      <TextInput
-        placeholder="Password"
-        style={styles.input}
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        editable={!loading}
-      />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {loading ? (
-        <ActivityIndicator size="large" />
-      ) : (
-        <>
-          <Button title="Login" onPress={handleLogin} />
-          <Button title="Don't have an account? Sign Up" onPress={() => router.push('../unauthenticated_tabs/signup')} />
-        </>
-      )}
-    </View>
+    <SafeAreaView style={styles.safeArea}>
+      {/* Back to Onboarding Button */}
+      <TouchableOpacity 
+        style={styles.backButton} 
+        onPress={() => router.push('/unauthenticated_tabs/onboarding')}
+      >
+        <Text style={styles.backButtonText}>← Back to Onboarding</Text>
+      </TouchableOpacity>
+
+      <View style={styles.container}>
+        <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={styles.logo} />
+        <Text style={styles.title}>Welcome Back!</Text>
+        <Text style={styles.subtitle}>Login to your Punch account</Text>
+        <TextInput
+          placeholder="Email"
+          style={styles.input}
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          editable={!loading}
+          placeholderTextColor="#aaa"
+        />
+        <TextInput
+          placeholder="Password"
+          style={styles.input}
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          editable={!loading}
+          placeholderTextColor="#aaa"
+        />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {loading ? (
+          <ActivityIndicator size="large" color="#fb7a20" />
+        ) : (
+          <>
+            <Button title="Login" color="#fb7a20" onPress={handleLogin} />
+            <Button title="Don't have an account? Sign Up" color="#222" onPress={() => router.push('../unauthenticated_tabs/signup')} />
+          </>
+        )}
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 20 },
-  title: { fontSize: 24, marginBottom: 20, textAlign: 'center' },
+  safeArea: { flex: 1, backgroundColor: 'white' },
+  backButton: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    zIndex: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#fb7a20',
+  },
+  backButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  logo: { width: 120, height: 120, marginBottom: 24, resizeMode: 'contain' },
+  title: { fontSize: 28, fontWeight: 'bold', color: '#fb7a20', marginBottom: 8, textAlign: 'center' },
+  subtitle: { fontSize: 16, color: '#222', marginBottom: 24, textAlign: 'center' },
   input: {
+    width: '100%',
     borderWidth: 1,
-    borderColor: '#ccc',
-    marginBottom: 12,
-    padding: 10,
-    borderRadius: 5,
+    borderColor: '#fb7a20',
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    color: '#222',
+    fontSize: 16,
   },
   error: { color: 'red', marginBottom: 10, textAlign: 'center' },
 });
