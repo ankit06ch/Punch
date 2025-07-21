@@ -2,7 +2,13 @@
 import { StyleSheet } from 'react-native';
 
 const profileStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', padding: 16 },
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    padding: 16,
+    paddingTop: 64, // match Discover page top spacing
+    paddingBottom: 40, // add or increase this value
+  },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -50,6 +56,12 @@ const profileStyles = StyleSheet.create({
     marginVertical: 16,               // more spacing between items
     fontWeight: '500',
   },
+  findFriendsStatus: { color: '#fb7a20', marginTop: 24, textAlign: 'center', fontSize: 16 },
+  findFriendsUserCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.06, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 2 },
+  findFriendsAvatarCircle: { width: 54, height: 54, borderRadius: 27, backgroundColor: '#f7f7f7', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+  findFriendsAvatarImageWrapper: { width: 48, height: 48, borderRadius: 24, overflow: 'hidden' },
+  findFriendsAvatarImage: { width: 48, height: 48, borderRadius: 24 },
+  findFriendsUsername: { color: '#fb7a20', fontWeight: 'bold', fontSize: 18 },
 });
 
 export default profileStyles;

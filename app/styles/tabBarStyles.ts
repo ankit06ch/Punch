@@ -9,16 +9,15 @@ const tabBarStyles = StyleSheet.create({
     backgroundColor: 'white',
     borderTopWidth: 0,
     elevation: 10,
-    height: 60,
+    height: 80, // taller nav bar
+    paddingBottom: 24, // more space from bottom
+    paddingTop: 12,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     shadowColor: '#000',
     shadowOpacity: 0.15,
     shadowOffset: { width: 0, height: -4 },
     shadowRadius: 12,
-    // Optionally add padding for icons
-    paddingBottom: 10,
-    paddingTop: 10,
   },
   centerButtonWrapper: {
     top: -15, // Move the NFC button lower (was -30)

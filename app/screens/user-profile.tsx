@@ -102,11 +102,11 @@ export default function UserProfileScreen() {
         <Text style={styles.name}>{user.name}</Text>
         {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
         <View style={styles.statsRow}>
-          <TouchableOpacity onPress={() => router.push({ pathname: '/screens/followers', params: { userId } })}>
+          <TouchableOpacity onPress={() => router.push('/screens/followers', { userId })}>
             <Text style={styles.statNumber}>{followersCount}</Text>
             <Text style={styles.statLabel}>Followers</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push({ pathname: '/screens/following', params: { userId } })}>
+          <TouchableOpacity onPress={() => router.push('/screens/following', { userId })}>
             <Text style={styles.statNumber}>{followingCount}</Text>
             <Text style={styles.statLabel}>Following</Text>
           </TouchableOpacity>

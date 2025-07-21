@@ -4,10 +4,11 @@ const CARD_WIDTH = width * 0.8;
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#fff',
-    paddingVertical: 20,
-    paddingLeft: 20,
     flex: 1,
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingTop: 64, // match Discover page top spacing
+    paddingBottom: 40, // add or increase this value
   },
   title: {
     fontSize: 28,

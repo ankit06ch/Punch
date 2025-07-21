@@ -140,12 +140,12 @@ export default function Onboarding() {
   return (
     <LinearGradient
       colors={['#FB7A20', '#FF8C42', '#FFA366']}
-      style={onboardingStyles.container}
+      style={[onboardingStyles.container, { flex: 1 }]}
     >
-      <StatusBar style="light" backgroundColor={statusBarColor} translucent={false} />
-      <SafeAreaView style={onboardingStyles.safeArea}>
+      <StatusBar style="light" translucent backgroundColor="transparent" />
+      <SafeAreaView style={[onboardingStyles.safeArea, { flex: 1 }]}>
         <VectorBackground screenIndex={currentIndex} />
-        <View style={{ alignItems: 'center', marginTop: 60, marginBottom: 0 }}>
+        <View style={{ alignItems: 'center', marginBottom: 0 }}>
           <ProgressCircleWithLogo screenIndex={currentIndex} />
         </View>
         <ScrollView
@@ -155,7 +155,8 @@ export default function Onboarding() {
           showsHorizontalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
-          style={onboardingStyles.scrollView}
+          style={[onboardingStyles.scrollView, { flex: 1 }]}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
         >
           {onboardingData.map((item, index) => renderScreen(item, index))}
         </ScrollView>

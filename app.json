@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ankitc.punch"
+      "bundleIdentifier": "com.ankitc.punch",
+      "statusBar": {
+      "style": "dark"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +21,15 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.ankitc.punch"
+      "package": "com.ankitc.punch",
+      "statusBar": {
+        "translucent": true,
+        "backgroundColor": "#00000000"
+      },
+      "navigationBar": {
+        "visible": "immersiveSticky",
+        "backgroundColor": "#00000000"
+      }
     },
     "web": {
       "bundler": "metro",
