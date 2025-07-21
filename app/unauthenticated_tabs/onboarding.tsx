@@ -16,7 +16,7 @@ import onboardingStyles from '../styles/onboardingStyles';
 import { AntDesign } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 const onboardingData = [
   {
@@ -47,19 +47,15 @@ const onboardingData = [
 
 function ProgressCircleWithLogo({ screenIndex = 0 }: { screenIndex?: number }) {
   const progressAnim = useRef(new Animated.Value(0)).current;
-  
   // Calculate target progress based on screen index (0-3 for 4 screens)
   const targetProgress = (screenIndex + 1) / 4; // 0.25, 0.5, 0.75, 1.0
-  
   useEffect(() => {
-    // Animate to the target progress
     Animated.timing(progressAnim, {
       toValue: targetProgress,
       duration: 800,
       useNativeDriver: false,
     }).start();
   }, [screenIndex, targetProgress]);
-  
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center', marginBottom: 32 }}>
       <View style={{ position: 'relative', width: 120, height: 120 }}>
@@ -99,9 +95,7 @@ function ProgressCircleWithLogo({ screenIndex = 0 }: { screenIndex?: number }) {
 export default function Onboarding() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
-  const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  // Optionally, you could vary the status bar color per page if you want
   const statusBarColor = '#FB7A20';
 
   const handleNext = () => {
@@ -113,7 +107,6 @@ export default function Onboarding() {
         animated: true,
       });
     } else {
-      // Navigate to signup on last screen
       router.replace('/unauthenticated_tabs/signup');
     }
   };
@@ -151,13 +144,10 @@ export default function Onboarding() {
     >
       <StatusBar style="light" backgroundColor={statusBarColor} translucent={false} />
       <SafeAreaView style={onboardingStyles.safeArea}>
-        {/* Vector Background */}
         <VectorBackground screenIndex={currentIndex} />
-        {/* Progress Ring and Logo (always visible above the text) */}
         <View style={{ alignItems: 'center', marginTop: 60, marginBottom: 0 }}>
           <ProgressCircleWithLogo screenIndex={currentIndex} />
         </View>
-        {/* Content */}
         <ScrollView
           ref={scrollViewRef}
           horizontal
