@@ -2,6 +2,8 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Platform, View, Text, Button, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import nfcStyles from '../styles/nfcStyles';
+import { auth, db } from '../../firebase/config';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 // Import NFC manager directly
 let nfcManager: any = null;

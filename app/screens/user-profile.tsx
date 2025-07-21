@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, collection } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,7 @@ export default function UserProfileScreen() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
+  const [privacySettings, setPrivacySettings] = useState<any>({});
   const currentUser = auth.currentUser;
 
   useEffect(() => {
@@ -24,12 +25,26 @@ export default function UserProfileScreen() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setUser(data);
-        setFollowersCount(data.followersCount || 0);
-        setFollowingCount(data.followingCount || 0);
-        if (currentUser && data.followerUids?.includes(currentUser.uid)) {
-          setIsFollowing(true);
-        } else {
+        setPrivacySettings(data.privacySettings || {});
+        
+        // Check if profile is private and user is not following
+        if (data.privacySettings?.profileVisibility === 'private' && 
+            currentUser && 
+            !data.followerUids?.includes(currentUser.uid) &&
+            currentUser.uid !== userId) {
+          // Profile is private and user doesn't have access
+          setFollowersCount(0);
+          setFollowingCount(0);
           setIsFollowing(false);
+        } else {
+          // Profile is public or user has access
+          setFollowersCount(data.followersCount || 0);
+          setFollowingCount(data.followingCount || 0);
+          if (currentUser && data.followerUids?.includes(currentUser.uid)) {
+            setIsFollowing(true);
+          } else {
+            setIsFollowing(false);
+          }
         }
       }
       setLoading(false);
@@ -39,31 +54,135 @@ export default function UserProfileScreen() {
 
   const handleFollow = async () => {
     if (!currentUser) return;
-    const userRef = doc(db, 'users', userId as string);
-    const currentUserRef = doc(db, 'users', currentUser.uid);
-    if (isFollowing) {
-      await updateDoc(userRef, {
-        followerUids: arrayRemove(currentUser.uid),
-        followersCount: followersCount - 1,
-      });
-      await updateDoc(currentUserRef, {
-        followingUids: arrayRemove(userId),
-        followingCount: followingCount - 1,
-      });
-      setIsFollowing(false);
-      setFollowersCount(followersCount - 1);
-    } else {
-      await updateDoc(userRef, {
-        followerUids: arrayUnion(currentUser.uid),
-        followersCount: followersCount + 1,
-      });
-      await updateDoc(currentUserRef, {
-        followingUids: arrayUnion(userId),
-        followingCount: followingCount + 1,
-      });
-      setIsFollowing(true);
-      setFollowersCount(followersCount + 1);
+    
+    try {
+      const currentUserId = currentUser.uid;
+      const targetUserId = userId as string;
+      const isFollowing = user?.followerUids?.includes(currentUserId);
+      
+      if (isFollowing) {
+        // Unfollow (works for both public and private)
+        await updateDoc(doc(db, 'users', currentUserId), {
+          followingUids: arrayRemove(targetUserId),
+          followingCount: (followingCount || 1) - 1,
+        });
+        await updateDoc(doc(db, 'users', targetUserId), {
+          followerUids: arrayRemove(currentUserId),
+          followersCount: (followersCount || 1) - 1,
+        });
+        setIsFollowing(false);
+        setFollowersCount(followersCount - 1);
+      } else {
+        // Check if target user has private profile
+        if (user?.privacySettings?.profileVisibility === 'private') {
+          // Send follow request
+          await sendFollowRequest(currentUserId, targetUserId);
+        } else {
+          // Public profile - auto follow
+          await updateDoc(doc(db, 'users', currentUserId), {
+            followingUids: arrayUnion(targetUserId),
+            followingCount: (followingCount || 0) + 1,
+          });
+          await updateDoc(doc(db, 'users', targetUserId), {
+            followerUids: arrayUnion(currentUserId),
+            followersCount: (followersCount || 0) + 1,
+          });
+          setIsFollowing(true);
+          setFollowersCount(followersCount + 1);
+        }
+      }
+      
+      // Refresh user data by calling the useEffect
+      const docRef = doc(db, 'users', userId as string);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setUser(data);
+        setPrivacySettings(data.privacySettings || {});
+        setFollowersCount(data.followersCount || 0);
+        setFollowingCount(data.followingCount || 0);
+        if (currentUser && data.followerUids?.includes(currentUser.uid)) {
+          setIsFollowing(true);
+        } else {
+          setIsFollowing(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling follow:', error);
     }
+  };
+
+  const sendFollowRequest = async (fromUserId: string, toUserId: string) => {
+    try {
+      // Create follow request notification
+      const notificationData = {
+        type: 'follow_request',
+        fromUserId,
+        toUserId,
+        timestamp: new Date(),
+        read: false,
+        status: 'pending', // pending, approved, denied
+        message: `@${currentUser?.displayName || 'user'} wants to follow you`,
+      };
+
+      // Add to notifications collection
+      await addDoc(collection(db, 'notifications'), notificationData);
+      
+      // Add to user's pending requests
+      await updateDoc(doc(db, 'users', toUserId), {
+        pendingFollowRequests: arrayUnion(fromUserId)
+      });
+
+      // Show success message
+      alert('Follow request sent!');
+    } catch (error) {
+      console.error('Error sending follow request:', error);
+    }
+  };
+
+  const canViewStats = (statType: string) => {
+    if (!user) return false;
+    if (currentUser?.uid === userId) return true; // User viewing their own profile
+    if (user.privacySettings?.profileVisibility === 'private' && !isFollowing) return false;
+    return user.privacySettings?.[`show${statType}`] !== false;
+  };
+
+  const canViewProfile = () => {
+    if (!user) return false;
+    if (currentUser?.uid === userId) return true; // User viewing their own profile
+    if (user.privacySettings?.profileVisibility === 'public') return true;
+    if (user.privacySettings?.profileVisibility === 'private' && isFollowing) return true;
+    return false;
+  };
+
+  const getDisplayStats = () => {
+    const stats = [];
+    
+    if (canViewStats('Followers')) {
+      stats.push({
+        label: 'Followers',
+        count: followersCount,
+        onPress: () => router.push(`/screens/followers?userId=${userId}`)
+      });
+    }
+    
+    if (canViewStats('Following')) {
+      stats.push({
+        label: 'Following',
+        count: followingCount,
+        onPress: () => router.push(`/screens/following?userId=${userId}`)
+      });
+    }
+    
+    if (canViewStats('StoresVisited')) {
+      stats.push({
+        label: 'Stores Visited',
+        count: user.storesVisitedCount || 0,
+        onPress: () => {} // Could open stores visited list
+      });
+    }
+    
+    return stats;
   };
 
   if (loading) {
@@ -82,6 +201,8 @@ export default function UserProfileScreen() {
     );
   }
 
+  const profileAccessible = canViewProfile();
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
@@ -90,6 +211,7 @@ export default function UserProfileScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
       </View>
+      
       <View style={styles.profileSection}>
         <View style={styles.avatarCircle}>
           {user.profilePictureUrl ? (
@@ -101,20 +223,42 @@ export default function UserProfileScreen() {
         <Text style={styles.username}>@{user.username}</Text>
         <Text style={styles.name}>{user.name}</Text>
         {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
-        <View style={styles.statsRow}>
-          <TouchableOpacity onPress={() => router.push('/screens/followers', { userId })}>
-            <Text style={styles.statNumber}>{followersCount}</Text>
-            <Text style={styles.statLabel}>Followers</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/screens/following', { userId })}>
-            <Text style={styles.statNumber}>{followingCount}</Text>
-            <Text style={styles.statLabel}>Following</Text>
-          </TouchableOpacity>
-        </View>
-        {currentUser && currentUser.uid !== userId && (
-          <TouchableOpacity style={[styles.followButton, isFollowing && styles.unfollowButton]} onPress={handleFollow}>
-            <Text style={[styles.followButtonText, isFollowing && styles.unfollowButtonText]}>{isFollowing ? 'Unfollow' : 'Follow'}</Text>
-          </TouchableOpacity>
+        
+        {!profileAccessible ? (
+          <View style={styles.privateProfileContainer}>
+            <Ionicons name="lock-closed" size={48} color="#ccc" />
+            <Text style={styles.privateProfileText}>This profile is private</Text>
+            <Text style={styles.privateProfileSubtext}>
+              Follow this user to see their profile
+            </Text>
+            {currentUser && currentUser.uid !== userId && (
+              <TouchableOpacity style={styles.followButton} onPress={handleFollow}>
+                <Text style={styles.followButtonText}>Follow</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+                      <>
+              <View style={styles.statsRow}>
+                {getDisplayStats().map((stat, index) => (
+                  <TouchableOpacity 
+                    key={stat.label}
+                    onPress={stat.onPress}
+                  >
+                    <Text style={styles.statNumber}>{stat.count}</Text>
+                    <Text style={styles.statLabel}>{stat.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            
+            {currentUser && currentUser.uid !== userId && (
+              <TouchableOpacity style={[styles.followButton, isFollowing && styles.unfollowButton]} onPress={handleFollow}>
+                <Text style={[styles.followButtonText, isFollowing && styles.unfollowButtonText]}>
+                  {isFollowing ? 'Unfollow' : 'Follow'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
       </View>
     </SafeAreaView>
@@ -140,4 +284,22 @@ const styles = StyleSheet.create({
   unfollowButton: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#fb7a20' },
   unfollowButtonText: { color: '#fb7a20' },
   status: { color: '#fb7a20', marginTop: 48, textAlign: 'center', fontSize: 18 },
+  privateProfileContainer: {
+    alignItems: 'center',
+    marginTop: 20,
+    paddingVertical: 20,
+  },
+  privateProfileText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  privateProfileSubtext: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
 }); 

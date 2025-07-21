@@ -138,13 +138,10 @@ export default function Onboarding() {
   };
 
   return (
-    <LinearGradient
-      colors={['#FB7A20', '#FF8C42', '#FFA366']}
-      style={[onboardingStyles.container, { flex: 1 }]}
-    >
-      <StatusBar style="light" translucent backgroundColor="transparent" />
+    <View style={[onboardingStyles.container, { flex: 1, backgroundColor: '#fff' }]}>
+      <StatusBar style="dark" translucent backgroundColor="transparent" />
       <SafeAreaView style={[onboardingStyles.safeArea, { flex: 1 }]}>
-        <VectorBackground screenIndex={currentIndex} />
+        {/* Remove VectorBackground for a cleaner look, or keep if desired */}
         <View style={{ alignItems: 'center', marginBottom: 0 }}>
           <ProgressCircleWithLogo screenIndex={currentIndex} />
         </View>
@@ -158,15 +155,25 @@ export default function Onboarding() {
           style={[onboardingStyles.scrollView, { flex: 1 }]}
           contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
         >
-          {onboardingData.map((item, index) => renderScreen(item, index))}
+          {onboardingData.map((item, index) => (
+            <View key={item.id} style={{ width, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+              <CustomText variant="title" weight="bold" style={[onboardingStyles.title, { color: '#222', marginBottom: 12, textAlign: 'center' }]}>{item.headline}</CustomText>
+              {item.subheadline ? (
+                <CustomText variant="subtitle" weight="normal" style={[onboardingStyles.subtitle, { color: '#666', marginBottom: 0, textAlign: 'center', fontWeight: '400' }]}>{item.subheadline}</CustomText>
+              ) : null}
+              {item.description && !item.subheadline ? (
+                <CustomText variant="body" weight="normal" style={[onboardingStyles.description, { color: '#888', textAlign: 'center', fontWeight: '400' }]}>{item.description}</CustomText>
+              ) : null}
+            </View>
+          ))}
         </ScrollView>
         {/* Navigation Buttons (always visible at the bottom) */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 24, marginBottom: 32, position: 'absolute', bottom: 40 }}>
           <TouchableOpacity onPress={handleSkip}>
-            <CustomText variant="body" weight="semibold" style={{ color: 'white', opacity: 0.8 }}>Skip</CustomText>
+            <CustomText variant="body" weight="semibold" style={{ color: '#FB7A20', opacity: 0.8 }}>Skip</CustomText>
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleNext} style={{ backgroundColor: 'white', borderRadius: 30, padding: 16 }}>
-            <AntDesign name="arrowright" size={28} color="#FB7A20" />
+          <TouchableOpacity onPress={handleNext} style={{ backgroundColor: '#FB7A20', borderRadius: 30, padding: 16 }}>
+            <AntDesign name="arrowright" size={28} color="#fff" />
           </TouchableOpacity>
         </View>
         {/* Progress Dots */}
@@ -182,6 +189,6 @@ export default function Onboarding() {
           ))}
         </View>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }

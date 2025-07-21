@@ -1,12 +1,11 @@
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useState } from 'react';
 import { View, TextInput, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '../../firebase/config';
 import { useRouter } from 'expo-router';
-import { doc, setDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { setDoc, doc } from 'firebase/firestore';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import CustomText from '../../components/CustomText';
 import { AntDesign } from '@expo/vector-icons';
 
@@ -34,9 +33,7 @@ export default function SignupScreen() {
   const [loading, setLoading] = useState(false);
 
   const usernameExists = async (username: string) => {
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('username', '==', username));
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await getDocs(query(collection(db, 'users'), where('username', '==', username)));
     return !querySnapshot.empty;
   };
 
@@ -58,40 +55,51 @@ export default function SignupScreen() {
 
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+      console.log('Created user:', user.uid, 'CurrentUser:', auth.currentUser?.uid);
+
+      // Test minimal Firestore write
+      try {
+        await setDoc(doc(db, 'users', user.uid), { test: true });
+        console.log('Test write succeeded');
+      } catch (testErr) {
+        console.error('Test write error:', testErr);
+      }
 
       // Save user data to Firestore
-      await setDoc(doc(db, 'users', user.uid), {
-        uid: user.uid,
-        name,
-        username,
-        bio,
-        profilePictureUrl: '', // you can update this later
-        storesVisitedCount: 0,
-        storesVisitedHistory: [],
-        rewardsRedeemed: [],
-        followersCount: 0,
-        followingCount: 0,
-        followerUids: [],
-        followingUids: [],
-      });
-
-      router.replace('../authenticated_tabs/home');
-    } catch (err: any) {
-        console.error('Signup error:', err);
-        const friendlyMessage = getFriendlyErrorMessage(err.code);
-        setError(friendlyMessage);
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          uid: user.uid,
+          name,
+          username,
+          bio,
+          profilePictureUrl: '', // you can update this later
+          storesVisitedCount: 0,
+          storesVisitedHistory: [],
+          rewardsRedeemed: [],
+          followersCount: 0,
+          followingCount: 0,
+          followerUids: [],
+          followingUids: [],
+        });
+        console.log('User data write succeeded');
+        router.replace('../authenticated_tabs/home');
+      } catch (err) {
+        console.error('Firestore write error:', err);
       }
+    } catch (err: any) {
+      console.error('Signup error:', err);
+      const friendlyMessage = getFriendlyErrorMessage(err.code);
+      setError(friendlyMessage);
+    }
+    setLoading(false);
   };
 
   return (
-    <LinearGradient
-      colors={['#FB7A20', '#FF8C42', '#FFA366']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         {/* Back Button */}
         <TouchableOpacity style={styles.backButton} onPress={() => router.replace('/unauthenticated_tabs/onboarding')}>
-          <AntDesign name="arrowleft" size={28} color="white" />
+          <AntDesign name="arrowleft" size={28} color="#FB7A20" />
         </TouchableOpacity>
         <ScrollView 
           contentContainerStyle={styles.scrollContent}
@@ -100,11 +108,10 @@ export default function SignupScreen() {
           {/* Logo */}
           <View style={styles.logoContainer}>
             <Image 
-              source={require('../../assets/Punch_Logos/Punch_T/white_logo.png')} 
+              source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} 
               style={styles.logo} 
             />
           </View>
-
           {/* Welcome Text */}
           <View style={styles.textContainer}>
             <CustomText variant="title" weight="bold" style={styles.title}>
@@ -114,35 +121,32 @@ export default function SignupScreen() {
               Create your account to start earning rewards
             </CustomText>
           </View>
-
           {/* Form */}
           <View style={styles.formContainer}>
             <View style={styles.inputContainer}>
-              <AntDesign name="user" size={20} color="rgba(255,255,255,0.7)" style={styles.inputIcon} />
+              <AntDesign name="user" size={20} color="#FB7A20" style={styles.inputIcon} />
               <TextInput
                 placeholder="Full Name"
                 style={styles.input}
                 value={name}
                 onChangeText={setName}
                 autoCapitalize="words"
-                placeholderTextColor="rgba(255,255,255,0.6)"
+                placeholderTextColor="#aaa"
               />
             </View>
-
             <View style={styles.inputContainer}>
-              <AntDesign name="tag" size={20} color="rgba(255,255,255,0.7)" style={styles.inputIcon} />
+              <AntDesign name="tag" size={20} color="#FB7A20" style={styles.inputIcon} />
               <TextInput
                 placeholder="Username"
                 style={styles.input}
                 value={username}
                 onChangeText={setUsername}
                 autoCapitalize="none"
-                placeholderTextColor="rgba(255,255,255,0.6)"
+                placeholderTextColor="#aaa"
               />
             </View>
-
             <View style={styles.inputContainer}>
-              <AntDesign name="edit" size={20} color="rgba(255,255,255,0.7)" style={styles.inputIcon} />
+              <AntDesign name="edit" size={20} color="#FB7A20" style={styles.inputIcon} />
               <TextInput
                 placeholder="Bio (optional)"
                 style={[styles.input, styles.bioInput]}
@@ -150,12 +154,11 @@ export default function SignupScreen() {
                 onChangeText={setBio}
                 multiline
                 numberOfLines={3}
-                placeholderTextColor="rgba(255,255,255,0.6)"
+                placeholderTextColor="#aaa"
               />
             </View>
-
             <View style={styles.inputContainer}>
-              <AntDesign name="mail" size={20} color="rgba(255,255,255,0.7)" style={styles.inputIcon} />
+              <AntDesign name="mail" size={20} color="#FB7A20" style={styles.inputIcon} />
               <TextInput
                 placeholder="Email"
                 style={styles.input}
@@ -163,38 +166,35 @@ export default function SignupScreen() {
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
-                placeholderTextColor="rgba(255,255,255,0.6)"
+                placeholderTextColor="#aaa"
               />
             </View>
-
             <View style={styles.inputContainer}>
-              <AntDesign name="lock" size={20} color="rgba(255,255,255,0.7)" style={styles.inputIcon} />
+              <AntDesign name="lock" size={20} color="#FB7A20" style={styles.inputIcon} />
               <TextInput
                 placeholder="Password"
                 style={styles.input}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
-                placeholderTextColor="rgba(255,255,255,0.6)"
+                placeholderTextColor="#aaa"
               />
             </View>
-
             {error ? (
               <View style={styles.errorContainer}>
-                <AntDesign name="exclamationcircleo" size={16} color="white" />
+                <AntDesign name="exclamationcircleo" size={16} color="#FB7A20" />
                 <CustomText variant="body" weight="medium" style={styles.errorText}>
                   {error}
                 </CustomText>
               </View>
             ) : null}
-
             <TouchableOpacity 
               style={[styles.signupButton, loading && styles.signupButtonDisabled]} 
               onPress={handleSignup}
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator size="small" color="white" />
+                <ActivityIndicator size="small" color="#FB7A20" />
               ) : (
                 <CustomText variant="button" weight="bold" style={styles.signupButtonText}>
                   Create Account
@@ -202,7 +202,6 @@ export default function SignupScreen() {
               )}
             </TouchableOpacity>
           </View>
-
           {/* Login Link */}
           <View style={styles.loginContainer}>
             <CustomText variant="body" weight="normal" style={styles.loginText}>
@@ -216,13 +215,14 @@ export default function SignupScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: 'white', // Changed from LinearGradient
   },
   safeArea: {
     flex: 1,
@@ -257,13 +257,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    color: 'white',
+    color: 'black', // Changed from white
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 18,
-    color: 'white',
+    color: 'black', // Changed from white
     opacity: 0.9,
     textAlign: 'center',
   },
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(0,0,0,0.05)', // Changed from white
     borderRadius: 12,
     marginBottom: 16,
     paddingHorizontal: 16,
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: 'white',
+    color: 'black', // Changed from white
     fontSize: 16,
     paddingVertical: 16,
   },
@@ -298,19 +298,19 @@ const styles = StyleSheet.create({
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.2)', // Changed from white
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginBottom: 16,
   },
   errorText: {
-    color: 'white',
+    color: 'black', // Changed from white
     marginLeft: 8,
     fontSize: 14,
   },
   signupButton: {
-    backgroundColor: 'white',
+    backgroundColor: '#FB7A20', // Changed from white
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
@@ -327,7 +327,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   signupButtonText: {
-    color: '#FB7A20',
+    color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -337,11 +337,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loginText: {
-    color: 'white',
+    color: 'black', // Changed from white
     opacity: 0.8,
   },
   loginLink: {
-    color: 'white',
+    color: '#FB7A20', // Changed from white
     textDecorationLine: 'underline',
   },
 });

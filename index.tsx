@@ -1,11 +1,10 @@
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import React from 'react';
-import { Slot } from 'expo-router';
+import App from './App';
 
-export default function Layout() {
+export default function Root() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <Slot />
+      <App />
     </GestureHandlerRootView>
   );
-}
+} 

@@ -5,6 +5,7 @@ const { width, height } = Dimensions.get('window');
 export default StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#fff',
   },
   safeArea: {
     flex: 1,
@@ -45,48 +46,45 @@ export default StyleSheet.create({
     marginBottom: 32,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: 'white',
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 38,
-  },
-  subtitle: {
-    fontSize: 18,
-    color: 'white',
+    color: '#222',
     textAlign: 'center',
     marginBottom: 12,
-    lineHeight: 24,
-    opacity: 0.9,
+    lineHeight: 34,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 12,
+    lineHeight: 22,
+    opacity: 1,
   },
   description: {
-    fontSize: 16,
-    color: 'white',
+    fontSize: 15,
+    color: '#888',
     textAlign: 'center',
-    fontWeight: '600',
-    opacity: 0.8,
+    fontWeight: '500',
+    opacity: 1,
   },
   bottomSection: {
     alignItems: 'center',
     marginBottom: 20, // Add margin to prevent overlap
   },
   ctaButton: {
-    backgroundColor: 'white',
+    backgroundColor: '#FB7A20',
     paddingHorizontal: 48,
     paddingVertical: 16,
     borderRadius: 30,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
     shadowRadius: 8,
     elevation: 8,
   },
   ctaText: {
-    color: '#FB7A20',
+    color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -94,7 +92,7 @@ export default StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 20, // Reduced padding
+    paddingBottom: 20,
     position: 'absolute',
     bottom: 0,
     left: 0,
@@ -107,11 +105,11 @@ export default StyleSheet.create({
     marginHorizontal: 4,
   },
   activeDot: {
-    backgroundColor: 'white',
+    backgroundColor: '#FB7A20',
     width: 24,
   },
   inactiveDot: {
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: '#eee',
   },
   // Vector design styles
   vectorContainer: {
@@ -160,5 +158,19 @@ export default StyleSheet.create({
     flex: 1,
     justifyContent: 'space-between',
     paddingBottom: 60, // Space for dots
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 32,
+    marginVertical: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
+    width: '90%',
+    maxWidth: 340,
+    alignSelf: 'center',
   },
 }); 

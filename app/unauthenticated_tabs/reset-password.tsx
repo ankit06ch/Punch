@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
-import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../firebase/config';
 import { useRouter } from 'expo-router';
 
@@ -11,7 +10,7 @@ export default function ResetPasswordScreen() {
 
   const handleReset = async () => {
     try {
-      await sendPasswordResetEmail(auth, email);
+      await auth().sendPasswordResetEmail(email);
       Alert.alert('Email Sent', 'Check your inbox for a reset link.');
       router.push('../login');
     } catch (err: any) {

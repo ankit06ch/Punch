@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, FlatList, Image, TouchableOpacity, Animated, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, FlatList, Image, TouchableOpacity, Animated, StyleSheet, ScrollView, TextInput, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { AntDesign, Feather } from '@expo/vector-icons';
-import { collection, getDocs, doc, updateDoc, arrayUnion, arrayRemove, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
 import discoverStyles from '../styles/discoverStyles';
 
@@ -16,6 +16,12 @@ export default function Discover() {
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('COFFEE');
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const animationValue = useRef(new Animated.Value(0)).current;
+  const screenWidth = Dimensions.get('window').width;
+  const screenHeight = Dimensions.get('window').height;
 
   useEffect(() => {
     fetchRestaurants();
@@ -41,10 +47,9 @@ export default function Discover() {
   async function fetchLiked() {
     const user = auth.currentUser;
     if (!user) return;
-    const userRef = doc(db, 'users', user.uid);
-    const userSnap = await getDoc(userRef);
-    if (userSnap.exists()) {
-      setLiked(userSnap.data().likedRestaurants || []);
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    if (userDoc.exists()) {
+      setLiked(userDoc.data()?.likedRestaurants || []);
     }
   }
 
@@ -76,18 +81,81 @@ export default function Discover() {
     }).start();
   };
 
+  // Animation handlers
+  const [containerLayout, setContainerLayout] = useState({ width: screenWidth, height: screenHeight });
+  const diagonal = Math.sqrt(containerLayout.width * containerLayout.width + containerLayout.height * containerLayout.height);
+  const CIRCLE_SIZE = diagonal + Math.max(containerLayout.width, containerLayout.height);
+
+  // Start at top-right (center of circle at top-right), end with center of scaled circle at screen center
+  const startX = containerLayout.width - CIRCLE_SIZE / 2;
+  const startY = 0 - CIRCLE_SIZE / 2;
+  const endX = containerLayout.width / 2 - CIRCLE_SIZE / 2;
+  const endY = containerLayout.height / 2 - CIRCLE_SIZE / 2;
+  const circleTranslateX = animationValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [startX, endX],
+  });
+  const circleTranslateY = animationValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [startY, endY],
+  });
+  const circleScale = animationValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.1, 1],
+  });
+
+  // Animation handlers (restored)
+  const openSearch = () => {
+    setSearchActive(true);
+    Animated.timing(animationValue, {
+      toValue: 1,
+      duration: 900,
+      useNativeDriver: true,
+    }).start();
+  };
+  const closeSearch = () => {
+    Animated.timing(animationValue, {
+      toValue: 0,
+      duration: 900,
+      useNativeDriver: true,
+    }).start(() => {
+      setSearchActive(false);
+      setSearchQuery('');
+      setSearchResults([]);
+    });
+  };
+
   // Filter by category (for demo, just show all)
   const filteredRestaurants = restaurants.filter(r =>
     r.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Search Firestore for restaurants by name as user types
+  useEffect(() => {
+    if (!searchActive || !searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    let isCancelled = false;
+    const fetchSearchResults = async () => {
+      const querySnapshot = await getDocs(collection(db, 'restaurants'));
+      const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+      const filtered = data.filter((r: any) =>
+        r.name && r.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
+      );
+      if (!isCancelled) setSearchResults(filtered);
+    };
+    fetchSearchResults();
+    return () => { isCancelled = true; };
+  }, [searchQuery, searchActive]);
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
+    <View style={{ flex: 1, backgroundColor: '#fff' }} onLayout={e => setContainerLayout(e.nativeEvent.layout)}>
       <StatusBar style="dark" backgroundColor="#fff" translucent={true} />
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 64, paddingBottom: 6 }}>
         <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#222', marginTop: 8 }}>Explore</Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={openSearch}>
           <Feather name="search" size={26} color="#fb7a20" />
         </TouchableOpacity>
       </View>
@@ -153,6 +221,77 @@ export default function Discover() {
           </TouchableOpacity>
         )}
       />
+      {/* Orange Search Overlay with Spilling Animation */}
+      {searchActive && (
+        <>
+          <Animated.View
+            pointerEvents="auto"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: CIRCLE_SIZE,
+              height: CIRCLE_SIZE,
+              borderRadius: CIRCLE_SIZE / 2,
+              backgroundColor: '#fb7a20',
+              zIndex: 100,
+              transform: [
+                { translateX: circleTranslateX },
+                { translateY: circleTranslateY },
+                { scale: circleScale },
+              ],
+            }}
+          />
+          {/* Overlay content, fades in with animation */}
+          <Animated.View
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: containerLayout.width,
+              height: containerLayout.height,
+              zIndex: 101,
+              opacity: animationValue,
+              justifyContent: 'flex-start',
+            }}
+            // pointerEvents logic removed for linter safety
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: 64, paddingHorizontal: 20, marginBottom: 16 }}>
+              <TouchableOpacity onPress={closeSearch} style={{ marginRight: 16 }}>
+                <AntDesign name="arrowleft" size={28} color="#fff" />
+              </TouchableOpacity>
+              <TextInput
+                style={{ flex: 1, backgroundColor: 'white', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#222' }}
+                placeholder="Search restaurants..."
+                placeholderTextColor="#fb7a20"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoFocus
+              />
+            </View>
+            {/* Search results */}
+            <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12 }}>
+              {searchQuery.trim() ? (
+                searchResults.length > 0 ? (
+                  searchResults.map((r: any) => (
+                    <TouchableOpacity key={r.id} style={{ paddingVertical: 16, borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }}>
+                      <Text style={{ color: '#fff', fontSize: 20 }}>{r.name}</Text>
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <Text style={{ color: '#fff', fontSize: 18, textAlign: 'center', marginTop: 40 }}>
+                    No restaurants found.
+                  </Text>
+                )
+              ) : (
+                <Text style={{ color: '#fff', fontSize: 18, textAlign: 'center', marginTop: 40 }}>
+                  Start typing to search for restaurants...
+                </Text>
+              )}
+            </View>
+          </Animated.View>
+        </>
+      )}
     </View>
   );
 }
