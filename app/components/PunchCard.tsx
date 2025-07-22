@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Image, Animated, StyleSheet, ViewStyle } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 interface PunchCardProps {
   businessName: string;
@@ -26,58 +27,52 @@ export default function PunchCard({ businessName, punches, total, color, logo, o
   }, [punches]);
 
   return (
-    <TouchableOpacity activeOpacity={onPress ? 0.85 : 1} onPress={onPress} style={[styles.cardContainer, { borderColor: color }, style as any]}> 
+    <TouchableOpacity activeOpacity={onPress ? 0.85 : 1} onPress={onPress} style={[styles.cardContainer, { borderColor: color, shadowColor: color }, style as any]}> 
+      {/* Large semi-transparent punch icon in background */}
+      <Ionicons name="pricetag" size={100} color={color + '33'} style={styles.bgIcon} />
       <View style={[styles.cardAccent, { backgroundColor: color }]} />
+      {/* Badge icon in top-right */}
+      <View style={styles.badgeIconWrap}>
+        <Ionicons name="star" size={22} color={color} style={{ backgroundColor: '#fff', borderRadius: 14, padding: 2, elevation: 2 }} />
+      </View>
       {logo && <Image source={logo} style={styles.logo} />}
       <Text style={styles.businessName}>{businessName}</Text>
+      {/* Punch count badge below the business name and above the punch row */}
+      <View style={[styles.punchCountBadge, { backgroundColor: color, alignSelf: 'flex-start', marginBottom: 8, marginTop: 4 }]}> 
+        <Text style={[styles.punchCountText, { fontSize: 16 }]}>{punches} / {total} punches</Text>
+      </View>
       <View style={styles.punchRow}>
         {punchArray.map((_, index) => {
           const isFilled = index < punches;
-          const isNext = index === punches && punches !== total;
           return (
-            <Animated.View
+            <Ionicons
               key={index}
-              style={[
-                styles.punch,
-                { borderColor: color },
-                isFilled ? { backgroundColor: color } : null,
-                isNext ? styles.nextPunch : null,
-                {
-                  transform: [{ scale: scaleAnimations[index].interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.5, 1],
-                  }) }],
-                  shadowColor: color,
-                  shadowOpacity: isFilled ? 0.4 : 0,
-                  shadowRadius: isFilled ? 6 : 0,
-                  shadowOffset: { width: 0, height: 3 },
-                },
-              ]}
+              name={isFilled ? 'ellipse' : 'ellipse-outline'}
+              size={18}
+              color={isFilled ? color : '#ddd'}
+              style={{ marginRight: 6, marginBottom: 2 }}
             />
           );
         })}
       </View>
-      <Text style={styles.cardSubtitle}>
-        {punches} / {total} punches
-      </Text>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   cardContainer: {
-    width: 320,
-    height: 180,
+    width: 280,
+    height: 150,
     backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 20,
+    padding: 16,
     marginBottom: 0,
     shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
-    borderWidth: 2,
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 12,
+    borderWidth: 2.5,
     overflow: 'hidden',
     alignItems: 'flex-start',
     justifyContent: 'flex-start',
@@ -91,6 +86,19 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     zIndex: 1,
+  },
+  bgIcon: {
+    position: 'absolute',
+    right: -30,
+    top: 10,
+    zIndex: 0,
+  },
+  badgeIconWrap: {
+    position: 'absolute',
+    top: 12,
+    right: 18,
+    zIndex: 3,
+    backgroundColor: 'transparent',
   },
   logo: {
     width: 36,
@@ -133,5 +141,19 @@ const styles = StyleSheet.create({
     color: '#555',
     fontWeight: '600',
     zIndex: 2,
+  },
+  punchCountBadge: {
+    position: 'relative',
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    zIndex: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  punchCountText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 }); 

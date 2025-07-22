@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, FlatList, Dimensions, Easing, TouchableOpacity, Animated as RNAnimated } from 'react-native';
+import { View, Text, FlatList, Dimensions, Easing, TouchableOpacity, Animated as RNAnimated, PanResponder, StyleSheet } from 'react-native';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import PunchCard from '../components/PunchCard';
@@ -7,6 +7,7 @@ import styles from '../styles/walletStyles';
 import { LinearGradient } from 'expo-linear-gradient';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, runOnJS } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 
 const CARD_COLORS = ['#7B61FF', '#FFB443', '#FF6171', '#2EC4B6', '#FFB703', '#A259FF', '#FF6F61', '#43B0FF', '#FFD166', '#06D6A0'];
 const { width, height } = Dimensions.get('window');
@@ -221,10 +222,20 @@ const SAMPLE_TRANSACTIONS = [
 ];
 
 function TransactionItem({ tx }: { tx: any }) {
+  let iconName = 'card-outline';
+  let iconColor = '#fb7a20';
+  if (tx.type === 'Punch Earned') {
+    iconName = 'checkmark-circle';
+    iconColor = '#2EC4B6';
+  } else if (tx.type === 'Reward Redeemed') {
+    iconName = 'gift';
+    iconColor = '#FFD166';
+  }
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
-      <View>
-        <Text style={{ fontWeight: '600', color: '#fff', fontSize: 16 }}>{tx.business}</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderColor: 'rgba(255,128,32,0.08)' }}>
+      <Ionicons name={iconName as any} size={28} color={iconColor} style={{ marginRight: 16 }} />
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontWeight: '600', color: '#fb7a20', fontSize: 16 }}>{tx.business}</Text>
         <Text style={{ color: '#b3c6e0', fontSize: 14 }}>{tx.type}</Text>
         <Text style={{ color: '#7a8fa6', fontSize: 13 }}>{tx.date}</Text>
       </View>
@@ -236,6 +247,61 @@ function TransactionItem({ tx }: { tx: any }) {
 export default function Wallet() {
   const [restaurants, setRestaurants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const flatListRef = useRef<FlatList<any>>(null);
+
+  // Bottom sheet animation state
+  const screenHeight = Dimensions.get('window').height;
+  const minSheetHeight = 400; // Height for preview (top bar + Transaction History title + 2-3 transactions visible)
+  const maxSheetHeight = screenHeight * 0.85; // Take up most of the screen when expanded
+  const sheetAnim = useRef(new RNAnimated.Value(minSheetHeight)).current;
+  const [sheetExpanded, setSheetExpanded] = useState(false);
+  const sheetAnimValueRef = useRef(minSheetHeight);
+
+  // PanResponder for drag up/down
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 10,
+      onPanResponderMove: (_, gestureState) => {
+        let newHeight = (sheetExpanded ? maxSheetHeight : minSheetHeight) - gestureState.dy;
+        newHeight = Math.max(minSheetHeight, Math.min(maxSheetHeight, newHeight));
+        sheetAnim.setValue(newHeight);
+        sheetAnimValueRef.current = newHeight;
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy < -40) {
+          // Dragged up
+          RNAnimated.timing(sheetAnim, {
+            toValue: maxSheetHeight,
+            duration: 200,
+            useNativeDriver: false,
+          }).start(() => setSheetExpanded(true));
+        } else if (gestureState.dy > 40) {
+          // Dragged down
+          RNAnimated.timing(sheetAnim, {
+            toValue: minSheetHeight,
+            duration: 200,
+            useNativeDriver: false,
+          }).start(() => setSheetExpanded(false));
+        } else {
+          // Snap to closest
+          if (sheetAnimValueRef.current > (minSheetHeight + maxSheetHeight) / 2) {
+            RNAnimated.timing(sheetAnim, {
+              toValue: maxSheetHeight,
+              duration: 200,
+              useNativeDriver: false,
+            }).start(() => setSheetExpanded(true));
+          } else {
+            RNAnimated.timing(sheetAnim, {
+              toValue: minSheetHeight,
+              duration: 200,
+              useNativeDriver: false,
+            }).start(() => setSheetExpanded(false));
+          }
+        }
+      },
+    })
+  ).current;
 
   useEffect(() => {
     const fetchRestaurants = async () => {
@@ -252,51 +318,139 @@ export default function Wallet() {
     fetchRestaurants();
   }, []);
 
+  // Handler for FlatList scroll to update current index
+  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
+    if (viewableItems && viewableItems.length > 0) {
+      setCurrentIndex(viewableItems[0].index || 0);
+    }
+  }).current;
+  const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 });
+
+  // Function to jump to a card when a dot is pressed
+  const scrollToIndex = (idx: number) => {
+    flatListRef.current?.scrollToIndex({ index: idx, animated: true });
+  };
+
   return (
-    <View style={[styles.container, { overflow: 'visible', paddingHorizontal: 0 }]}>
+    <View style={[styles.container, { overflow: 'visible', paddingHorizontal: 0, flex: 1 }]}> 
       <MovingOrangeGlow />
       {/* Title with Explore-style spacing */}
       <View style={{ marginTop: 32, marginBottom: 16, paddingHorizontal: 20, overflow: 'visible' }}>
         <Text style={styles.title}>My Punch Cards</Text>
       </View>
       {/* Carousel of cards */}
-      <View style={{ height: CARD_HEIGHT + 24, marginBottom: 24, overflow: 'visible', paddingHorizontal: 20 }}>
+      <View style={{ height: CARD_HEIGHT + 24, marginBottom: 16, overflow: 'visible', paddingHorizontal: 0 }}>
         <FlatList
+          ref={flatListRef}
           data={restaurants}
           keyExtractor={(item) => item.id}
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 12 }}
+          contentContainerStyle={{ paddingHorizontal: 32 }}
+          snapToInterval={360 + 24} // card width + margin
+          decelerationRate="fast"
+          snapToAlignment="center"
+          ItemSeparatorComponent={() => <View style={{ width: 24 }} />}
           renderItem={({ item }) => (
             <AnimatedCard card={item}>
-              <CreditCard card={item} />
+              <PunchCard
+                businessName={item.name || item.businessName || 'Business'}
+                punches={item.punches || 0}
+                total={item.total || 10}
+                color={item.color}
+                logo={item.logoUrl ? { uri: item.logoUrl } : undefined}
+              />
             </AnimatedCard>
           )}
           ListEmptyComponent={loading ? <Text>Loading...</Text> : <Text>No cards yet.</Text>}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewConfigRef.current}
         />
-      </View>
-      {/* Transaction History at the bottom */}
-      <View style={styles.transactionHistoryContainer}>
-        <LinearGradient
-          colors={['#18325a', '#0a2342']}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={styles.transactionHistoryBackground}
-        />
-        <View style={[{ zIndex: 1 }, styles.transactionHistoryContent]}>
-          <Text style={[styles.transactionTitle, { color: '#fff' }]}>Transaction History</Text>
-          <FlatList
-            data={SAMPLE_TRANSACTIONS}
-            keyExtractor={item => item.id}
-            renderItem={({ item }) => <TransactionItem tx={item} />}
-            style={{ marginTop: 8 }}
-            showsVerticalScrollIndicator={false}
-          />
-          <View style={styles.addPassContainer}>
-            <Text style={[styles.addPassText, { color: '#b3c6e0' }]}>Add to Apple Wallet coming soon</Text>
+        {/* Slider Dots */}
+        {restaurants.length > 1 && (
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 32, marginBottom: 8 }}>
+            {restaurants.map((_, idx) => (
+              <TouchableOpacity
+                key={idx}
+                onPress={() => scrollToIndex(idx)}
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: 5,
+                  marginHorizontal: 5,
+                  backgroundColor: idx === currentIndex ? '#fb7a20' : '#ffe3c2',
+                  borderWidth: idx === currentIndex ? 1.5 : 1,
+                  borderColor: idx === currentIndex ? '#fb7a20' : '#ffe3c2',
+                }}
+              />
+            ))}
           </View>
+        )}
+      </View>
+      {/* Member Status Badge */}
+      <View style={{ alignItems: 'center', marginTop: 8, marginBottom: 8 }}>
+        <View style={{ backgroundColor: '#fb7a20', borderRadius: 18, paddingVertical: 6, paddingHorizontal: 22, alignItems: 'center', justifyContent: 'center', shadowColor: '#fb7a20', shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4 }}>
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16, letterSpacing: 0.5 }}>Member Status: Gold</Text>
         </View>
       </View>
+      {/* Extra content in white space below member status */}
+      <View style={{ alignItems: 'center', marginBottom: 24 }}>
+        {/* Motivational message */}
+        <Text style={{ color: '#fb7a20', fontWeight: '600', fontSize: 18, marginBottom: 8, marginTop: 8, textAlign: 'center' }}>
+          Keep earning punches to unlock your next reward!
+        </Text>
+        {/* Progress bar toward next reward */}
+        <View style={{ width: 220, height: 14, backgroundColor: '#ffe3c2', borderRadius: 7, overflow: 'hidden', marginBottom: 8 }}>
+          <View style={{ width: '60%', height: '100%', backgroundColor: '#fb7a20', borderRadius: 7 }} />
+        </View>
+        {/* Fun icon */}
+        <View style={{ marginTop: 4 }}>
+          <Ionicons name="trophy" size={32} color="#fb7a20" />
+        </View>
+      </View>
+      {/* Slide-up Transaction History Bottom Sheet */}
+      <RNAnimated.View
+        style={[
+          {
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 11, // Add margin from the bottom
+            height: sheetAnim,
+            backgroundColor: '#fff',
+            borderTopLeftRadius: 32,
+            borderTopRightRadius: 32,
+            shadowColor: '#000',
+            shadowOpacity: 0.18,
+            shadowRadius: 24,
+            shadowOffset: { width: 0, height: -8 },
+            elevation: 30,
+            zIndex: 100,
+            overflow: 'hidden',
+          },
+        ]}
+        {...panResponder.panHandlers}
+      >
+        {/* Handle Bar */}
+        <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 4 }}>
+          <View style={{ width: 48, height: 6, borderRadius: 3, backgroundColor: '#eee', marginBottom: 8 }} />
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, marginBottom: 8 }}>
+          <Text style={{ fontSize: 20, fontWeight: '700', color: '#fb7a20' }}>Transaction History</Text>
+          <Text style={{ color: '#fb7a20', fontWeight: '600', fontSize: 14 }}>{sheetExpanded ? 'Swipe down to close' : 'Swipe up to expand'}</Text>
+        </View>
+        <FlatList
+          data={SAMPLE_TRANSACTIONS}
+          keyExtractor={item => item.id}
+          renderItem={({ item }) => <TransactionItem tx={item} />}
+          style={{ flex: 1, paddingHorizontal: 24, marginTop: 0 }}
+          contentContainerStyle={{ paddingBottom: 32 }}
+          showsVerticalScrollIndicator={sheetExpanded}
+        />
+        <View style={{ alignItems: 'center', marginTop: 8, marginBottom: 12 }}>
+          <Text style={{ color: '#aaa', fontSize: 15 }}>Add to Apple Wallet coming soon</Text>
+        </View>
+      </RNAnimated.View>
     </View>
   );
 }

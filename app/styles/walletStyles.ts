@@ -6,22 +6,22 @@ const CARD_HEIGHT = 180; // Assuming a default height for cards
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#fff', // white background
     paddingHorizontal: 20,
-    paddingTop: 40, // reduced from 64 for better spacing
-    paddingBottom: 0, // Remove bottom padding to avoid space below
+    paddingTop: 40,
+    paddingBottom: 0,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#fb7a20',
+    color: '#fb7a20', // white title
     marginBottom: 20,
     alignSelf: 'flex-start',
   },
   cardContainer: {
     width: CARD_WIDTH,
     height: 180,
-    backgroundColor: '#fff',
+    backgroundColor: '#fff', // keep cards white for contrast
     borderRadius: 24,
     padding: 24,
     marginRight: 0,
@@ -33,7 +33,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 8,
     borderWidth: 1.5,
-    borderColor: '#ffe3c2',
+    borderColor: '#fff0e0', // lighter orange border
     overflow: 'hidden',
   },
   cardAccent: {
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     marginBottom: 15,
-    color: '#222',
+    color: '#fb7a20', // orange business name
     marginTop: 44,
     zIndex: 2,
   },
@@ -82,16 +82,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   nextPunch: {
-    borderColor: '#ffa94d',
+    borderColor: '#fff0e0',
     borderWidth: 3,
   },
   cardSubtitle: {
     fontSize: 16,
-    color: '#555',
+    color: '#fb7a20', // orange subtitle
     fontWeight: '600',
   },
   cardStackArea: {
-    height: width * 0.7 + 60, // enough for stacked cards
+    height: width * 0.7 + 60,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   },
   cardStackContainer: {
     width: CARD_WIDTH,
-    height: CARD_HEIGHT + 24 * 3, // enough for 4 stacked cards
+    height: CARD_HEIGHT + 24 * 3,
     position: 'relative',
     alignSelf: 'center',
   },
@@ -117,15 +117,15 @@ const styles = StyleSheet.create({
     width: CARD_WIDTH * 0.7,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#eee',
+    backgroundColor: '#fff0e0', // lighter orange
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#fb7a20',
     alignSelf: 'center',
   },
   moreCardsText: {
-    color: '#888',
+    color: '#fb7a20', // orange text
     fontWeight: '600',
     fontSize: 16,
   },
@@ -133,8 +133,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
     marginTop: 8,
-    // Remove borderTopLeftRadius and borderTopRightRadius here
-    // Remove padding here
     position: 'relative',
     overflow: 'visible',
     shadowColor: '#000',
@@ -151,11 +149,11 @@ const styles = StyleSheet.create({
   transactionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#222',
+    color: '#fb7a20', // white title
     marginBottom: 8,
   },
   transactionEmpty: {
-    color: '#aaa',
+    color: '#fff',
     fontSize: 16,
   },
   addPassContainer: {
@@ -163,7 +161,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addPassText: {
-    color: '#aaa',
+    color: '#fff',
     fontSize: 16,
     marginTop: 24,
   },
@@ -178,6 +176,7 @@ const styles = StyleSheet.create({
     zIndex: 0,
     width: '100%',
     alignSelf: 'center',
+    backgroundColor: '#fb7a20', // orange background for history
   },
 });
 
