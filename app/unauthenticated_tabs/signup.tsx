@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Animated, Easing, Dimensions, Keyboard, TouchableWithoutFeedback, Switch, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Animated, Easing, Dimensions, Keyboard, TouchableWithoutFeedback, Switch, KeyboardAvoidingView, Platform, Linking } from 'react-native';
 // Custom Checkbox
 function CustomCheckbox({ value, onValueChange }: { value: boolean; onValueChange: (v: boolean) => void }) {
   return (
@@ -22,8 +22,6 @@ function CustomCheckbox({ value, onValueChange }: { value: boolean; onValueChang
     </TouchableOpacity>
   );
 }
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
 import { auth, db } from '../../firebase/config';
 import { useRouter } from 'expo-router';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
@@ -109,11 +107,6 @@ export default function SignupScreen() {
   const [agree, setAgree] = useState(false);
   const [notifEmail, setNotifEmail] = useState(true);
   const [notifText, setNotifText] = useState(false);
-  // Google Auth
-  WebBrowser.maybeCompleteAuthSession();
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    clientId: 'YOUR_CLIENT_ID',
-  });
 
   // Animate step transitions
   const animateStep = () => {
@@ -336,6 +329,27 @@ export default function SignupScreen() {
                   {typedPrompt}
                   <Animated.Text style={{ opacity: 0.7, fontSize: 22, color: '#FB7A20' }}>|</Animated.Text>
                 </CustomText>
+                {/* Name step: show name input */}
+                {current.key === 'name' && (
+                  <View style={styles.inputContainer}>
+                    <AntDesign name="user" size={20} color="#FB7A20" style={styles.inputIconCentered} />
+                    <TextInput
+                      placeholder="Your full name"
+                      style={styles.input}
+                      value={form.name}
+                      onChangeText={text => {
+                        setForm({ ...form, name: text });
+                        setError('');
+                      }}
+                      autoCapitalize="words"
+                      placeholderTextColor="#aaa"
+                      editable={!loading}
+                      maxLength={40}
+                      onSubmitEditing={handleNext}
+                      returnKeyType="next"
+                    />
+                  </View>
+                )}
                 {/* Contact step: show both email and phone fields */}
                 {current.key === 'contact' && (
                   <View style={{ width: '100%', alignItems: 'center' }}>
@@ -392,38 +406,12 @@ export default function SignupScreen() {
                     </View>
                   </View>
                 )}
-                {/* Google Sign In/Up button */}
-                {current.key === 'contact' && (
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: '#fff',
-                      borderRadius: 8,
-                      paddingVertical: 12,
-                      paddingHorizontal: 24,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      marginTop: 16,
-                      marginBottom: 8,
-                      borderWidth: 1,
-                      borderColor: '#eee',
-                      shadowColor: '#000',
-                      shadowOpacity: 0.06,
-                      shadowRadius: 4,
-                      elevation: 2,
-                    }}
-                    onPress={() => promptAsync && promptAsync()}
-                    disabled={!request}
-                  >
-                    <Image source={require('../../assets/images/Google__G__logo.svg.png')} style={{ width: 22, height: 22, marginRight: 12, borderRadius: 4 }} />
-                    <CustomText style={{ color: '#222', fontWeight: '600', fontSize: 16 }}>Sign up with Google</CustomText>
-                  </TouchableOpacity>
-                )}
                 {/* Terms and Privacy checkbox */}
                 {current.key === 'summary' && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 8 }}>
                     <CustomCheckbox value={agree} onValueChange={setAgree} />
                     <CustomText style={{ marginLeft: 8, color: '#222' }}>
-                      I agree to <CustomText style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => WebBrowser.openBrowserAsync('https://your-terms-url.com')}>Terms of Service</CustomText> & <CustomText style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => WebBrowser.openBrowserAsync('https://your-privacy-url.com')}>Privacy Policy</CustomText>
+                      I agree to <CustomText style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://your-terms-url.com')}>Terms of Service</CustomText> & <CustomText style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://your-privacy-url.com')}>Privacy Policy</CustomText>
                     </CustomText>
                   </View>
                 )}
