@@ -57,6 +57,25 @@ export default function Profile() {
     })
   ).current;
   const [selectedProfileTab, setSelectedProfileTab] = useState<'liked' | 'rewards'>('liked');
+  // Add scale animation for profile zoom-out
+  const profileScale = useRef(new Animated.Value(1)).current;
+
+  // Animate scale when modalVisible changes
+  useEffect(() => {
+    if (modalVisible) {
+      Animated.timing(profileScale, {
+        toValue: 0.93,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(profileScale, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [modalVisible]);
 
   const router = useRouter();
 
@@ -641,8 +660,8 @@ export default function Profile() {
         </View>
       </View>
 
-      {/* Profile content */}
-      <View style={styles.profileContent}>
+      {/* Profile content with zoom-out animation */}
+      <Animated.View style={[styles.profileContent, { transform: [{ scale: profileScale }] }]}> 
         <View style={styles.avatarContainer}>
           <View style={styles.avatarCircle}>
             <Ionicons name="person-circle" size={90} color="#bbb" />
@@ -742,7 +761,7 @@ export default function Profile() {
             )}
           </View>
         )}
-      </View>
+      </Animated.View>
 
       {/* Orange Search Overlay with Spilling Animation */}
       {searchActive && (
@@ -832,7 +851,7 @@ export default function Profile() {
 
       {/* Settings Modal */}
       <Modal
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         visible={modalVisible}
         onRequestClose={() => setModalVisible(false)}

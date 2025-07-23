@@ -14,6 +14,7 @@ import CustomText from '../../components/CustomText';
 import onboardingStyles from '../styles/onboardingStyles';
 import { AntDesign } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { BlurView } from 'expo-blur';
 import { Animated, Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -110,6 +111,66 @@ function ProgressCircleWithLogo({ screenIndex = 0 }: { screenIndex?: number }) {
   );
 }
 
+function AnimatedBubblesBackground() {
+  // Define animated values for each bubble
+  const bubbles = [
+    { size: 180, color: '#FB7A20', opacity: 0.10, left: 40, top: 80, animRange: 40, duration: 4000 },
+    { size: 120, color: '#FB7A20', opacity: 0.08, left: 220, top: 200, animRange: 30, duration: 5000 },
+    { size: 90, color: '#FB7A20', opacity: 0.07, left: 100, top: 400, animRange: 25, duration: 3500 },
+    { size: 140, color: '#FB7A20', opacity: 0.09, left: 260, top: 500, animRange: 35, duration: 6000 },
+  ];
+  const animatedValues = bubbles.map(() => React.useRef(new Animated.Value(0)).current);
+
+  React.useEffect(() => {
+    animatedValues.forEach((anim, i) => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: bubbles[i].duration,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0,
+            duration: bubbles[i].duration,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    });
+  }, []);
+
+  return (
+    <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 0 }} pointerEvents="none">
+      {bubbles.map((bubble, i) => (
+        <Animated.View
+          key={i}
+          style={{
+            position: 'absolute',
+            left: bubble.left,
+            top: bubble.top,
+            width: bubble.size,
+            height: bubble.size,
+            borderRadius: bubble.size / 2,
+            backgroundColor: bubble.color,
+            opacity: bubble.opacity,
+            transform: [
+              {
+                translateY: animatedValues[i].interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, -bubble.animRange],
+                }),
+              },
+            ],
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
 function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext, scrollViewRef, handleScroll, modalAnim }: OnboardingModalProps) {
   const insets = useSafeAreaInsets();
   const MODAL_WIDTH = width - 48; // 24px margin on each side
@@ -128,25 +189,30 @@ function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext,
       alignSelf: 'center',
       transform: [{ translateY: modalAnim }],
     }}>
-      <View style={{
-        backgroundColor: '#fff',
-        borderTopLeftRadius: 32,
-        borderTopRightRadius: 32,
-        borderBottomLeftRadius: 16,
-        borderBottomRightRadius: 16,
-        paddingHorizontal: 32,
-        paddingTop: 32,
-        paddingBottom: insets.bottom,
-        flex: 1,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 8,
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        width: MODAL_WIDTH,
-      }}>
+      <BlurView
+        intensity={40}
+        tint="light"
+        style={{
+          borderTopLeftRadius: 32,
+          borderTopRightRadius: 32,
+          borderBottomLeftRadius: 16,
+          borderBottomRightRadius: 16,
+          paddingHorizontal: 32,
+          paddingTop: 32,
+          paddingBottom: insets.bottom,
+          flex: 1,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -8 },
+          shadowOpacity: 0.18,
+          shadowRadius: 24,
+          elevation: 18,
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: MODAL_WIDTH,
+          overflow: 'hidden',
+          backgroundColor: 'rgba(255,255,255,0.55)',
+        }}
+      >
         {/* Swipeable Text Content */}
         <ScrollView
           ref={scrollViewRef}
@@ -181,7 +247,7 @@ function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext,
             <AntDesign name="arrowright" size={28} color="#fff" />
           </TouchableOpacity>
         </View>
-      </View>
+      </BlurView>
     </Animated.View>
   );
 }
@@ -189,11 +255,11 @@ function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext,
 export default function Onboarding() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const MODAL_HEIGHT = 280;
+  const MODAL_WIDTH = width - 48; // 24px margin on each side, must match modal
   const scrollViewRef = useRef<ScrollView>(null);
   const modalAnim = useRef(new Animated.Value(MODAL_HEIGHT + 80)).current; // Start fully off-screen
   const [modalVisible, setModalVisible] = useState(false);
   const insets = useSafeAreaInsets();
-  const MODAL_WIDTH = width;
 
   useEffect(() => {
     // Show modal after mount (simulate after splash navigation)
@@ -221,7 +287,7 @@ export default function Onboarding() {
       const nextIndex = currentIndex + 1;
       setCurrentIndex(nextIndex);
       scrollViewRef.current?.scrollTo({
-        x: nextIndex * width,
+        x: nextIndex * MODAL_WIDTH,
         animated: true,
       });
     } else {
@@ -235,7 +301,7 @@ export default function Onboarding() {
 
   const handleScroll = (event: any) => {
     const contentOffset = event.nativeEvent.contentOffset.x;
-    const index = Math.round(contentOffset / width);
+    const index = Math.round(contentOffset / MODAL_WIDTH);
     setCurrentIndex(index);
   };
 
@@ -258,6 +324,7 @@ export default function Onboarding() {
   return (
     <View style={[onboardingStyles.container, { flex: 1, backgroundColor: '#fff' }]}>
       <StatusBar style="dark" translucent backgroundColor="transparent" />
+      <AnimatedBubblesBackground />
       <OnboardingModal
         currentIndex={currentIndex}
         onboardingData={onboardingData}
