@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
-  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -15,6 +14,8 @@ import CustomText from '../../components/CustomText';
 import onboardingStyles from '../styles/onboardingStyles';
 import { AntDesign } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { Animated, Easing } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -44,6 +45,23 @@ const onboardingData = [
     description: 'Loyalty is better when it\'s social.',
   },
 ];
+
+interface OnboardingItem {
+  id: number;
+  headline: string;
+  subheadline: string;
+  description: string;
+}
+
+interface OnboardingModalProps {
+  currentIndex: number;
+  onboardingData: OnboardingItem[];
+  handleSkip: () => void;
+  handleNext: () => void;
+  scrollViewRef: React.RefObject<ScrollView | null>;
+  handleScroll: (event: any) => void;
+  modalAnim: Animated.Value;
+}
 
 function ProgressCircleWithLogo({ screenIndex = 0 }: { screenIndex?: number }) {
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -92,9 +110,109 @@ function ProgressCircleWithLogo({ screenIndex = 0 }: { screenIndex?: number }) {
   );
 }
 
+function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext, scrollViewRef, handleScroll, modalAnim }: OnboardingModalProps) {
+  const insets = useSafeAreaInsets();
+  const MODAL_WIDTH = width - 48; // 24px margin on each side
+  const MODAL_HEIGHT = 280;
+  return (
+    <Animated.View style={{
+      position: 'absolute',
+      left: 24,
+      right: 24,
+      bottom: 0,
+      width: MODAL_WIDTH,
+      zIndex: 10,
+      height: MODAL_HEIGHT + insets.bottom,
+      backgroundColor: 'transparent',
+      justifyContent: 'flex-end',
+      alignSelf: 'center',
+      transform: [{ translateY: modalAnim }],
+    }}>
+      <View style={{
+        backgroundColor: '#fff',
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
+        borderBottomLeftRadius: 16,
+        borderBottomRightRadius: 16,
+        paddingHorizontal: 32,
+        paddingTop: 32,
+        paddingBottom: insets.bottom,
+        flex: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 8,
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        width: MODAL_WIDTH,
+      }}>
+        {/* Swipeable Text Content */}
+        <ScrollView
+          ref={scrollViewRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          style={{ width: MODAL_WIDTH, flexGrow: 0 }}
+          contentContainerStyle={{ alignItems: 'center' }}
+        >
+          {onboardingData.map((item: OnboardingItem, index: number) => (
+            <View key={item.id} style={{ width: MODAL_WIDTH, alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ maxWidth: 340, alignSelf: 'center' }}>
+                <CustomText variant="title" weight="bold" style={{ color: '#222', marginBottom: 12, textAlign: 'center' }}>{item.headline}</CustomText>
+                {item.subheadline ? (
+                  <CustomText variant="subtitle" weight="normal" style={{ color: '#666', marginBottom: 8, textAlign: 'center', fontWeight: '400' }}>{item.subheadline}</CustomText>
+                ) : null}
+                {item.description ? (
+                  <CustomText variant="body" weight="normal" style={{ color: '#888', textAlign: 'center', fontWeight: '400', marginBottom: 12 }}>{item.description}</CustomText>
+                ) : null}
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+        {/* Navigation Buttons */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: 8 }}>
+          <TouchableOpacity onPress={handleSkip}>
+            <CustomText variant="body" weight="semibold" style={{ color: '#FB7A20', opacity: 0.8 }}>Skip</CustomText>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleNext} style={{ backgroundColor: '#FB7A20', borderRadius: 30, padding: 16 }}>
+            <AntDesign name="arrowright" size={28} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
+
 export default function Onboarding() {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const MODAL_HEIGHT = 280;
   const scrollViewRef = useRef<ScrollView>(null);
+  const modalAnim = useRef(new Animated.Value(MODAL_HEIGHT + 80)).current; // Start fully off-screen
+  const [modalVisible, setModalVisible] = useState(false);
+  const insets = useSafeAreaInsets();
+  const MODAL_WIDTH = width;
+
+  useEffect(() => {
+    // Show modal after mount (simulate after splash navigation)
+    const timer = setTimeout(() => setModalVisible(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (modalVisible) {
+      setTimeout(() => {
+        Animated.spring(modalAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          friction: 7,
+          tension: 60,
+        }).start();
+      }, 200);
+    }
+  }, [modalVisible]);
 
   const statusBarColor = '#FB7A20';
 
@@ -140,55 +258,15 @@ export default function Onboarding() {
   return (
     <View style={[onboardingStyles.container, { flex: 1, backgroundColor: '#fff' }]}>
       <StatusBar style="dark" translucent backgroundColor="transparent" />
-      <SafeAreaView style={[onboardingStyles.safeArea, { flex: 1 }]}>
-        {/* Remove VectorBackground for a cleaner look, or keep if desired */}
-        <View style={{ alignItems: 'center', marginBottom: 0 }}>
-          <ProgressCircleWithLogo screenIndex={currentIndex} />
-        </View>
-        <ScrollView
-          ref={scrollViewRef}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-          style={[onboardingStyles.scrollView, { flex: 1 }]}
-          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
-        >
-          {onboardingData.map((item, index) => (
-            <View key={item.id} style={{ width, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-              <CustomText variant="title" weight="bold" style={[onboardingStyles.title, { color: '#222', marginBottom: 12, textAlign: 'center' }]}>{item.headline}</CustomText>
-              {item.subheadline ? (
-                <CustomText variant="subtitle" weight="normal" style={[onboardingStyles.subtitle, { color: '#666', marginBottom: 0, textAlign: 'center', fontWeight: '400' }]}>{item.subheadline}</CustomText>
-              ) : null}
-              {item.description && !item.subheadline ? (
-                <CustomText variant="body" weight="normal" style={[onboardingStyles.description, { color: '#888', textAlign: 'center', fontWeight: '400' }]}>{item.description}</CustomText>
-              ) : null}
-            </View>
-          ))}
-        </ScrollView>
-        {/* Navigation Buttons (always visible at the bottom) */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 24, marginBottom: 32, position: 'absolute', bottom: 40 }}>
-          <TouchableOpacity onPress={handleSkip}>
-            <CustomText variant="body" weight="semibold" style={{ color: '#FB7A20', opacity: 0.8 }}>Skip</CustomText>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleNext} style={{ backgroundColor: '#FB7A20', borderRadius: 30, padding: 16 }}>
-            <AntDesign name="arrowright" size={28} color="#fff" />
-          </TouchableOpacity>
-        </View>
-        {/* Progress Dots */}
-        <View style={onboardingStyles.dotsContainer}>
-          {onboardingData.map((_, index) => (
-            <View
-              key={index}
-              style={[
-                onboardingStyles.dot,
-                index === currentIndex ? onboardingStyles.activeDot : onboardingStyles.inactiveDot,
-              ]}
-            />
-          ))}
-        </View>
-      </SafeAreaView>
+      <OnboardingModal
+        currentIndex={currentIndex}
+        onboardingData={onboardingData}
+        handleSkip={handleSkip}
+        handleNext={handleNext}
+        scrollViewRef={scrollViewRef}
+        handleScroll={handleScroll}
+        modalAnim={modalAnim}
+      />
     </View>
   );
 }

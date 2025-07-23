@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text, TextProps, StyleSheet } from 'react-native';
+import { useFonts, Nunito_400Regular, Nunito_500Medium, Nunito_600SemiBold, Nunito_700Bold } from '@expo-google-fonts/nunito';
 
 interface CustomTextProps extends TextProps {
   variant?: 'title' | 'subtitle' | 'body' | 'caption' | 'button';
@@ -13,12 +14,23 @@ export default function CustomText({
   children, 
   ...props 
 }: CustomTextProps) {
+  const [fontsLoaded] = useFonts({
+    Nunito_400Regular,
+    Nunito_500Medium,
+    Nunito_600SemiBold,
+    Nunito_700Bold,
+  });
+  if (!fontsLoaded) return null;
+  let fontFamily = 'Nunito_400Regular';
+  if (weight === 'medium') fontFamily = 'Nunito_500Medium';
+  if (weight === 'semibold') fontFamily = 'Nunito_600SemiBold';
+  if (weight === 'bold') fontFamily = 'Nunito_700Bold';
   return (
     <Text 
       style={[
         styles.base,
         styles[variant],
-        styles[weight],
+        { fontFamily },
         style,
       ]} 
       {...props}
@@ -58,16 +70,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     color: '#FB7A20', // Override base color for buttons
   },
-  normal: {
-    fontWeight: '400',
-  },
-  medium: {
-    fontWeight: '500',
-  },
-  semibold: {
-    fontWeight: '600',
-  },
-  bold: {
-    fontWeight: '700',
-  },
+  normal: {},
+  medium: {},
+  semibold: {},
+  bold: {},
 }); 
