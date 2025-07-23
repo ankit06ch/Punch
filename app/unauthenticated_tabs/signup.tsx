@@ -1,5 +1,29 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Animated, Easing, Dimensions } from 'react-native';
+import { View, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Animated, Easing, Dimensions, Keyboard, TouchableWithoutFeedback, Switch, KeyboardAvoidingView, Platform } from 'react-native';
+// Custom Checkbox
+function CustomCheckbox({ value, onValueChange }: { value: boolean; onValueChange: (v: boolean) => void }) {
+  return (
+    <TouchableOpacity
+      onPress={() => onValueChange(!value)}
+      style={{
+        width: 22,
+        height: 22,
+        borderRadius: 6,
+        borderWidth: 2,
+        borderColor: value ? '#FB7A20' : '#ccc',
+        backgroundColor: value ? '#FB7A20' : '#fff',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: value }}
+    >
+      {value && <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#fff' }} />}
+    </TouchableOpacity>
+  );
+}
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
 import { auth, db } from '../../firebase/config';
 import { useRouter } from 'expo-router';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
@@ -8,6 +32,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomText from '../../components/CustomText';
 import { AntDesign } from '@expo/vector-icons';
 
+// Remove bio step, combine email/phone into one step
 const steps = [
   {
     key: 'name',
@@ -24,32 +49,14 @@ const steps = [
     validate: (val: string) => val.trim().length > 2 || 'Username must be at least 3 characters.',
   },
   {
-    key: 'bio',
-    prompt: "Want to add a short bio? (Optional)",
-    placeholder: 'Tell us about yourself (or skip)',
-    icon: 'edit',
-    validate: () => true, // Optional
-  },
-  {
     key: 'contact',
-    prompt: "How should we contact you?",
-    placeholder: '',
-    icon: '',
-    validate: () => true,
-  },
-  {
-    key: 'email',
-    prompt: "What's your email address?",
-    placeholder: 'Email',
+    prompt: "How can we reach you?",
     icon: 'mail',
-    validate: (val: string) => /.+@.+\..+/.test(val) || 'Please enter a valid email.',
-  },
-  {
-    key: 'phone',
-    prompt: "What's your phone number?",
-    placeholder: 'Phone number',
-    icon: 'phone',
-    validate: (val: string) => val.replace(/\D/g, '').length === 10 || 'Please enter a valid 10-digit phone number.',
+    validate: (form: any) => {
+      if (!form.email || !/.+@.+\..+/.test(form.email)) return 'Please enter a valid email.';
+      // phone is optional
+      return true;
+    },
   },
   {
     key: 'password',
@@ -90,7 +97,7 @@ function getFriendlyErrorMessage(errorCode: string) {
 export default function SignupScreen() {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState({ name: '', username: '', bio: '', email: '', phone: '', password: '' });
+  const [form, setForm] = useState({ name: '', username: '', email: '', phone: '', password: '' });
   const [mode, setMode] = useState<'email' | 'phone'>('email');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -99,6 +106,14 @@ export default function SignupScreen() {
   // Typewriter effect
   const [typedPrompt, setTypedPrompt] = useState('');
   const promptTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [agree, setAgree] = useState(false);
+  const [notifEmail, setNotifEmail] = useState(true);
+  const [notifText, setNotifText] = useState(false);
+  // Google Auth
+  WebBrowser.maybeCompleteAuthSession();
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    clientId: 'YOUR_CLIENT_ID',
+  });
 
   // Animate step transitions
   const animateStep = () => {
@@ -149,11 +164,6 @@ export default function SignupScreen() {
     setError('');
     const current = steps[step];
     const value = form[current.key as keyof typeof form];
-    if (current.key === 'bio') {
-      setStep(step + 1);
-      animateStep();
-      return;
-    }
     if (current.key === 'username') {
       if (typeof current.validate === 'function') {
         const valid = current.validate(value);
@@ -168,27 +178,14 @@ export default function SignupScreen() {
       animateStep();
       return;
     }
-    // Contact step: choose email or phone
     if (current.key === 'contact') {
-      setStep(step + 1);
-      animateStep();
-      return;
-    }
-    // Email/phone step: validate only the selected mode
-    if ((current.key === 'email' && mode === 'email') || (current.key === 'phone' && mode === 'phone')) {
       if (typeof current.validate === 'function') {
-        const valid = current.validate(value);
+        const valid = current.validate(form);
         if (valid !== true) {
           setError(typeof valid === 'string' ? valid : 'Please fill this in.');
           return;
         }
       }
-      setStep(step + 1);
-      animateStep();
-      return;
-    }
-    // Skip phone/email step if not selected
-    if ((current.key === 'email' && mode === 'phone') || (current.key === 'phone' && mode === 'email')) {
       setStep(step + 1);
       animateStep();
       return;
@@ -226,7 +223,7 @@ export default function SignupScreen() {
         uid: user.uid,
         name: form.name,
         username: form.username,
-        bio: form.bio,
+        bio: '', // Removed bio
         profilePictureUrl: '',
         storesVisitedCount: 0,
         storesVisitedHistory: [],
@@ -235,6 +232,8 @@ export default function SignupScreen() {
         followingCount: 0,
         followerUids: [],
         followingUids: [],
+        emailNotifications: notifEmail, // Added email notifications
+        textNotifications: notifText, // Added text notifications
       });
       router.replace('../authenticated_tabs/home');
     } catch (err: any) {
@@ -247,7 +246,7 @@ export default function SignupScreen() {
   const progressAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(progressAnim, {
-      toValue: step / (steps.length - 1), // Exclude summary
+      toValue: (step + 1) / steps.length,
       duration: 500,
       useNativeDriver: false,
     }).start();
@@ -291,188 +290,225 @@ export default function SignupScreen() {
 
   return (
     // soft peachy background
-    <View style={[styles.container, { backgroundColor: '#FFF7F2' }]}>
-      <SafeAreaView style={styles.safeArea}>
-        {/* Back Button at top left of screen */}
-        <TouchableOpacity style={styles.backButtonScreen} onPress={handleBack}>
-          <AntDesign name="arrowleft" size={28} color="#FB7A20" />
-        </TouchableOpacity>
-        {/* Logo above card */}
-        <View style={styles.logoContainer}>
-          <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={styles.logo} />
-        </View>
-        {/* Animated progress bar above card */}
-        <View style={styles.progressBarWrap}>
-          <Animated.View
-            style={{
-              height: 6,
-              backgroundColor: '#FB7A20',
-              width: progressAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: ['0%', '100%'],
-              }),
-              borderTopLeftRadius: 8,
-              borderTopRightRadius: 8,
-            }}
-          />
-        </View>
-        {/* Card/modal effect for the form */}
-        <View style={styles.cardModal}>
-          <Animated.View
-            style={{
-              width: '100%',
-              alignItems: 'center',
-              opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
-              transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }],
-            }}
-          >
-            {/* Animated typewriter prompt */}
-            <CustomText variant="title" weight="bold" style={styles.prompt}>
-              {typedPrompt}
-              <Animated.Text style={{ opacity: 0.7, fontSize: 22, color: '#FB7A20' }}>|</Animated.Text>
-            </CustomText>
-            {/* Contact method tab switcher */}
-            {current.key === 'contact' && renderContactTabs()}
-            {/* Email/phone input step */}
-            {((current.key === 'email' && mode === 'email') || (current.key === 'phone' && mode === 'phone')) && (
-              <View style={styles.inputContainer}>
-                <AntDesign name={current.icon as any} size={20} color="#FB7A20" style={styles.inputIcon} />
-                <TextInput
-                  placeholder={current.placeholder}
-                  style={styles.input}
-                  value={mode === 'email' ? form.email : formatPhoneNumber(form.phone)}
-                  onChangeText={text => {
-                    setForm({ ...form, [mode]: mode === 'email' ? text : text.replace(/\D/g, '').slice(0, 10) });
-                    setError('');
-                  }}
-                  autoCapitalize="none"
-                  placeholderTextColor="#aaa"
-                  keyboardType={mode === 'email' ? 'email-address' : 'phone-pad'}
-                  editable={!loading}
-                  maxLength={mode === 'email' ? 30 : 12}
-                  onSubmitEditing={handleNext}
-                  returnKeyType="next"
-                />
-              </View>
-            )}
-            {/* All other steps */}
-            {!isSummary && !['contact', 'email', 'phone'].includes(current.key) && (
-              <View style={styles.inputContainer}>
-                <AntDesign name={current.icon as any} size={20} color="#FB7A20" style={styles.inputIcon} />
-                <TextInput
-                  placeholder={current.placeholder}
-                  style={styles.input}
-                  value={form[current.key as keyof typeof form] as string}
-                  onChangeText={text => {
-                    setForm({ ...form, [current.key]: text });
-                    setError('');
-                    if (current.key === 'username') setUsernameCheck('idle');
-                  }}
-                  autoCapitalize={current.key === 'name' ? 'words' : 'none'}
-                  placeholderTextColor="#aaa"
-                  secureTextEntry={current.secure}
-                  editable={!loading}
-                  multiline={current.key === 'bio'}
-                  numberOfLines={current.key === 'bio' ? 3 : 1}
-                  onSubmitEditing={handleNext}
-                  returnKeyType="next"
-                />
-                {/* Username check indicator */}
-                {current.key === 'username' && usernameCheck === 'checking' && (
-                  <ActivityIndicator size="small" color="#FB7A20" style={{ marginLeft: 8 }} />
-                )}
-                {current.key === 'username' && usernameCheck === 'taken' && (
-                  <AntDesign name="closecircle" size={18} color="#FB7A20" style={{ marginLeft: 8 }} />
-                )}
-                {current.key === 'username' && usernameCheck === 'available' && (
-                  <AntDesign name="checkcircle" size={18} color="#4BB543" style={{ marginLeft: 8 }} />
-                )}
-              </View>
-            )}
-            {/* Error message */}
-            {error ? (
-              <View style={styles.errorContainer}>
-                <AntDesign name="exclamationcircleo" size={16} color="#FB7A20" />
-                <CustomText variant="body" weight="medium" style={styles.errorText}>
-                  {error}
-                </CustomText>
-              </View>
-            ) : null}
-            {/* Step navigation */}
-            <View style={styles.buttonRow}>
-              {step > 0 && !isSummary && (
-                <TouchableOpacity style={styles.secondaryButton} onPress={handleBack} disabled={loading}>
-                  <CustomText variant="button" weight="bold" style={styles.secondaryButtonText}>Back</CustomText>
-                </TouchableOpacity>
-              )}
-              {!isSummary && (
-                <TouchableOpacity
-                  style={[styles.nextButton, loading && styles.nextButtonDisabled]}
-                  onPress={handleNext}
-                  disabled={loading}
-                >
-                  <CustomText variant="button" weight="bold" style={styles.nextButtonText}>
-                    Next
-                  </CustomText>
-                </TouchableOpacity>
-              )}
-              {isSummary && (
-                <TouchableOpacity
-                  style={[styles.signupButton, loading && styles.signupButtonDisabled]}
-                  onPress={handleSignup}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator size="small" color="#FB7A20" />
-                  ) : (
-                    <CustomText variant="button" weight="bold" style={styles.signupButtonText}>
-                      Create Account
-                    </CustomText>
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
-            {/* Summary */}
-            {isSummary && (
-              <View style={styles.summaryBox}>
-                <CustomText variant="body" weight="semibold" style={{ marginBottom: 8 }}>
-                  <AntDesign name="user" size={16} color="#FB7A20" />  {form.name}
-                </CustomText>
-                <CustomText variant="body" weight="semibold" style={{ marginBottom: 8 }}>
-                  <AntDesign name="tag" size={16} color="#FB7A20" />  @{form.username}
-                </CustomText>
-                {form.bio ? (
-                  <CustomText variant="body" weight="normal" style={{ marginBottom: 8 }}>
-                    <AntDesign name="edit" size={16} color="#FB7A20" />  {form.bio}
-                  </CustomText>
-                ) : null}
-                {mode === 'email' && (
-                  <CustomText variant="body" weight="normal" style={{ marginBottom: 8 }}>
-                    <AntDesign name="mail" size={16} color="#FB7A20" />  {form.email}
-                  </CustomText>
-                )}
-                {mode === 'phone' && (
-                  <CustomText variant="body" weight="normal" style={{ marginBottom: 8 }}>
-                    <AntDesign name="phone" size={16} color="#FB7A20" />  {formatPhoneNumber(form.phone)}
-                  </CustomText>
-                )}
-              </View>
-            )}
-          </Animated.View>
-        </View>
-        {/* Login Link */}
-        <View style={styles.loginContainer}>
-          <CustomText variant="body" weight="normal" style={styles.loginText}>
-            Already have an account?{' '}
-          </CustomText>
-          <TouchableOpacity onPress={() => router.push('../unauthenticated_tabs/login')}>
-            <CustomText variant="body" weight="bold" style={styles.loginLink}>
-              Login
-            </CustomText>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={[styles.container, { backgroundColor: '#FFF7F2' }]}>
+        <SafeAreaView style={styles.safeArea}>
+          {/* Back Button at top left of screen */}
+          <TouchableOpacity style={styles.backButtonScreen} onPress={handleBack}>
+            <AntDesign name="arrowleft" size={28} color="#FB7A20" />
           </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    </View>
+          {/* Logo above card */}
+          <View style={styles.logoContainer}>
+            <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={styles.logo} />
+          </View>
+          {/* Animated progress bar above card */}
+          <View style={styles.progressBarWrap}>
+            <Animated.View
+              style={{
+                height: 6,
+                backgroundColor: '#FB7A20',
+                width: progressAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0%', '100%'],
+                }),
+                borderTopLeftRadius: 8,
+                borderTopRightRadius: 8,
+              }}
+            />
+          </View>
+          {/* Card/modal effect for the form, wrapped in KeyboardAvoidingView */}
+          <KeyboardAvoidingView
+            style={{ flex: 1, width: '100%' }}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+          >
+            <View style={styles.cardModalFull}>
+              <Animated.View
+                style={{
+                  width: '100%',
+                  alignItems: 'center',
+                  opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
+                  transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }],
+                }}
+              >
+                {/* Animated typewriter prompt */}
+                <CustomText variant="title" weight="bold" style={styles.prompt}>
+                  {typedPrompt}
+                  <Animated.Text style={{ opacity: 0.7, fontSize: 22, color: '#FB7A20' }}>|</Animated.Text>
+                </CustomText>
+                {/* Contact step: show both email and phone fields */}
+                {current.key === 'contact' && (
+                  <View style={{ width: '100%', alignItems: 'center' }}>
+                    <View style={styles.inputContainer}>
+                      <AntDesign name="mail" size={20} color="#FB7A20" style={styles.inputIconCentered} />
+                      <TextInput
+                        placeholder="Email"
+                        style={styles.input}
+                        value={form.email}
+                        onChangeText={text => {
+                          setForm({ ...form, email: text });
+                          setError('');
+                        }}
+                        autoCapitalize="none"
+                        placeholderTextColor="#aaa"
+                        keyboardType="email-address"
+                        editable={!loading}
+                        maxLength={30}
+                        onSubmitEditing={handleNext}
+                        returnKeyType="next"
+                      />
+                    </View>
+                    <View style={styles.inputContainer}>
+                      <AntDesign name="phone" size={20} color="#FB7A20" style={styles.inputIconCentered} />
+                      <TextInput
+                        placeholder="Phone (optional)"
+                        style={styles.input}
+                        value={formatPhoneNumber(form.phone)}
+                        onChangeText={text => {
+                          setForm({ ...form, phone: text.replace(/\D/g, '').slice(0, 10) });
+                          setError('');
+                        }}
+                        autoCapitalize="none"
+                        placeholderTextColor="#aaa"
+                        keyboardType="phone-pad"
+                        editable={!loading}
+                        maxLength={12}
+                        onSubmitEditing={handleNext}
+                        returnKeyType="next"
+                      />
+                    </View>
+                  </View>
+                )}
+                {/* Notification preferences */}
+                {current.key === 'contact' && (
+                  <View style={{ width: '100%', marginTop: 12, marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <Switch value={notifEmail} onValueChange={setNotifEmail} thumbColor={notifEmail ? '#FB7A20' : '#ccc'} trackColor={{ true: '#fcd7b0', false: '#eee' }} />
+                      <CustomText style={{ marginLeft: 8, color: '#222' }}>Email me updates & rewards</CustomText>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Switch value={notifText} onValueChange={setNotifText} thumbColor={notifText ? '#FB7A20' : '#ccc'} trackColor={{ true: '#fcd7b0', false: '#eee' }} />
+                      <CustomText style={{ marginLeft: 8, color: '#222' }}>Text me updates & rewards</CustomText>
+                    </View>
+                  </View>
+                )}
+                {/* Google Sign In/Up button */}
+                {current.key === 'contact' && (
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: '#fff',
+                      borderRadius: 8,
+                      paddingVertical: 12,
+                      paddingHorizontal: 24,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      marginTop: 16,
+                      marginBottom: 8,
+                      borderWidth: 1,
+                      borderColor: '#eee',
+                      shadowColor: '#000',
+                      shadowOpacity: 0.06,
+                      shadowRadius: 4,
+                      elevation: 2,
+                    }}
+                    onPress={() => promptAsync && promptAsync()}
+                    disabled={!request}
+                  >
+                    <Image source={require('../../assets/images/Google__G__logo.svg.png')} style={{ width: 22, height: 22, marginRight: 12, borderRadius: 4 }} />
+                    <CustomText style={{ color: '#222', fontWeight: '600', fontSize: 16 }}>Sign up with Google</CustomText>
+                  </TouchableOpacity>
+                )}
+                {/* Terms and Privacy checkbox */}
+                {current.key === 'summary' && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 8 }}>
+                    <CustomCheckbox value={agree} onValueChange={setAgree} />
+                    <CustomText style={{ marginLeft: 8, color: '#222' }}>
+                      I agree to <CustomText style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => WebBrowser.openBrowserAsync('https://your-terms-url.com')}>Terms of Service</CustomText> & <CustomText style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => WebBrowser.openBrowserAsync('https://your-privacy-url.com')}>Privacy Policy</CustomText>
+                    </CustomText>
+                  </View>
+                )}
+                {/* Error message */}
+                {error ? (
+                  <View style={styles.errorContainer}>
+                    <AntDesign name="exclamationcircleo" size={16} color="#FB7A20" />
+                    <CustomText variant="body" weight="medium" style={styles.errorText}>
+                      {error}
+                    </CustomText>
+                  </View>
+                ) : null}
+                {/* Step navigation */}
+                <View style={styles.buttonRow}>
+                  {step > 0 && !isSummary && (
+                    <TouchableOpacity style={styles.secondaryButton} onPress={handleBack} disabled={loading}>
+                      <CustomText variant="button" weight="bold" style={styles.secondaryButtonText}>Back</CustomText>
+                    </TouchableOpacity>
+                  )}
+                  {!isSummary && (
+                    <TouchableOpacity
+                      style={[styles.nextButton, loading && styles.nextButtonDisabled]}
+                      onPress={handleNext}
+                      disabled={loading}
+                    >
+                      <CustomText variant="button" weight="bold" style={styles.nextButtonText}>
+                        Next
+                      </CustomText>
+                    </TouchableOpacity>
+                  )}
+                  {isSummary && (
+                    <TouchableOpacity
+                      style={[styles.signupButton, (!agree || loading) && styles.signupButtonDisabled]}
+                      onPress={handleSignup}
+                      disabled={!agree || loading}
+                    >
+                      {loading ? (
+                        <ActivityIndicator size="small" color="#FB7A20" />
+                      ) : (
+                        <CustomText variant="button" weight="bold" style={styles.signupButtonText}>
+                          Create Account
+                        </CustomText>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {/* Summary */}
+                {isSummary && (
+                  <View style={styles.summaryBox}>
+                    <CustomText variant="body" weight="semibold" style={{ marginBottom: 8 }}>
+                      <AntDesign name="user" size={16} color="#FB7A20" />  {form.name}
+                    </CustomText>
+                    <CustomText variant="body" weight="semibold" style={{ marginBottom: 8 }}>
+                      <AntDesign name="tag" size={16} color="#FB7A20" />  @{form.username}
+                    </CustomText>
+                    <CustomText variant="body" weight="normal" style={{ marginBottom: 8 }}>
+                      <AntDesign name="mail" size={16} color="#FB7A20" />  {form.email}
+                    </CustomText>
+                    {form.phone ? (
+                      <CustomText variant="body" weight="normal" style={{ marginBottom: 8 }}>
+                        <AntDesign name="phone" size={16} color="#FB7A20" />  {formatPhoneNumber(form.phone)}
+                      </CustomText>
+                    ) : null}
+                    <CustomText variant="body" weight="normal" style={{ marginBottom: 8 }}>
+                      <AntDesign name="notification" size={16} color="#FB7A20" />  {notifEmail ? 'Email' : ''}{notifEmail && notifText ? ' & ' : ''}{notifText ? 'Text' : ''} notifications
+                    </CustomText>
+                  </View>
+                )}
+                {/* Login Link inside modal */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 24 }}>
+                  <CustomText variant="body" weight="normal" style={styles.loginText}>
+                    Already have an account?{' '}
+                  </CustomText>
+                  <TouchableOpacity onPress={() => router.push('../unauthenticated_tabs/login')}>
+                    <CustomText variant="body" weight="bold" style={styles.loginLink}>
+                      Login
+                    </CustomText>
+                  </TouchableOpacity>
+                </View>
+              </Animated.View>
+            </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -676,6 +712,35 @@ const styles = StyleSheet.create({
     minHeight: 320,
     alignItems: 'center',
     position: 'relative',
+  },
+  cardModalFull: {
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    padding: 28,
+    marginHorizontal: 0,
+    marginTop: 32,
+    marginBottom: 0,
+    shadowColor: '#FB7A20',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.10,
+    shadowRadius: 24,
+    elevation: 12,
+    alignSelf: 'stretch',
+    width: '100%',
+    maxWidth: undefined,
+    minHeight: 320,
+    alignItems: 'center',
+    position: 'relative',
+    flexGrow: 1,
+    justifyContent: 'flex-start',
+  },
+  inputIconCentered: {
+    marginRight: 12,
+    alignSelf: 'center',
+    marginTop: 0,
   },
   progressBarWrap: {
     width: '94%',
