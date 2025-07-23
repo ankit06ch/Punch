@@ -53,10 +53,8 @@ const loginStyles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#6B7280', // match text gray
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 12,
     marginBottom: 16,
     paddingHorizontal: 16,
     paddingVertical: 4,
@@ -66,10 +64,10 @@ const loginStyles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: '#6B7280', // gray text
+    color: 'black',
     fontSize: 16,
     paddingVertical: 16,
-    backgroundColor: 'white',
+    backgroundColor: 'transparent',
   },
   errorContainer: {
     flexDirection: 'row',

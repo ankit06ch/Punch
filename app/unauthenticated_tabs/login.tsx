@@ -1,12 +1,14 @@
 import { AntDesign, Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Image, KeyboardAvoidingView, Platform, ScrollView, TextInput, TouchableOpacity, View, Dimensions } from 'react-native';
+import { useRef, useState, useEffect } from 'react';
+import { ActivityIndicator, Animated, Easing, Image, KeyboardAvoidingView, Platform, ScrollView, TextInput, TouchableOpacity, View, Dimensions, Keyboard, KeyboardEvent } from 'react-native';
+import { BlurView } from 'expo-blur';
 
 import CustomText from '../../components/CustomText';
 import { auth } from '../../firebase/config';
 import loginStyles from '../styles/loginStyles';
+import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -21,6 +23,43 @@ export default function LoginScreen() {
   const outlineAnim = useRef(new Animated.Value(0)).current; // 0 for email, 1 for phone
   const [showPassword, setShowPassword] = useState(false);
   const { width } = Dimensions.get('window');
+
+  const MODAL_WIDTH = width - 48;
+  const MODAL_HEIGHT = 420;
+  const modalAnim = useRef(new Animated.Value(MODAL_HEIGHT + 80)).current;
+  const keyboardOffset = 80;
+
+  useEffect(() => {
+    Animated.spring(modalAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      friction: 7,
+      tension: 60,
+    }).start();
+
+    const handleKeyboardShow = (e: KeyboardEvent) => {
+      Animated.timing(modalAnim, {
+        toValue: -keyboardOffset,
+        duration: 300,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.cubic),
+      }).start();
+    };
+    const handleKeyboardHide = () => {
+      Animated.timing(modalAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.cubic),
+      }).start();
+    };
+    const showSub = Keyboard.addListener('keyboardDidShow', handleKeyboardShow);
+    const hideSub = Keyboard.addListener('keyboardDidHide', handleKeyboardHide);
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   function getFriendlyErrorMessage(errorCode: string) {
     switch (errorCode) {
@@ -112,6 +151,7 @@ export default function LoginScreen() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <View style={{ flex: 1, backgroundColor: '#FFF7F2' }}>
+        <AnimatedBubblesBackground />
         {/* Back Arrow at top left */}
         <TouchableOpacity style={[loginStyles.backButton, { position: 'absolute', top: 16, left: 16, zIndex: 20, backgroundColor: 'rgba(255,255,255,0.12)' }]} onPress={() => {
           if (router.canGoBack && router.canGoBack()) {
@@ -123,207 +163,226 @@ export default function LoginScreen() {
           <AntDesign name="arrowleft" size={28} color="#FB7A20" />
         </TouchableOpacity>
         {/* Logo above card */}
-        <View style={{ alignItems: 'center', justifyContent: 'center', marginTop: 28, marginBottom: 12 }}>
-          <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={{ width: 64, height: 64, resizeMode: 'contain' }} />
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, alignItems: 'center' }}>
+          <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={{ width: 90, height: 90, resizeMode: 'contain' }} />
         </View>
-        {/* Card/modal effect for the form */}
-        <View style={{
-          backgroundColor: 'rgba(255,255,255,0.98)',
-          borderRadius: 28,
-          padding: 28,
-          marginHorizontal: 16,
-          marginTop: 0,
-          marginBottom: 16,
-          shadowColor: '#FB7A20',
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.10,
-          shadowRadius: 24,
-          elevation: 12,
+        {/* Animated modal card */}
+        <Animated.View style={{
+          position: 'absolute',
+          left: 24,
+          right: 24,
+          bottom: 0,
+          width: MODAL_WIDTH,
+          zIndex: 10,
+          minHeight: MODAL_HEIGHT,
+          backgroundColor: 'transparent',
+          justifyContent: 'flex-end',
           alignSelf: 'center',
-          width: '94%',
-          maxWidth: 420,
-          minHeight: 320,
-          alignItems: 'center',
-          position: 'relative',
+          transform: [{ translateY: modalAnim }],
         }}>
-          {/* Welcome Text */}
-          <View style={loginStyles.textContainer}>
-            <CustomText variant="title" weight="bold" style={loginStyles.title}>
-              Welcome Back!
-            </CustomText>
-            <CustomText variant="subtitle" weight="medium" style={loginStyles.subtitle}>
-              Login to your Punch account
-            </CustomText>
-          </View>
-          {/* Tab Switcher with Animated Orange Outline */}
-          <View style={{ flexDirection: 'row', width: '100%', marginBottom: 24, gap: 8, position: 'relative', height: 48 }}>
-            {/* Animated orange outline border */}
-            <Animated.View
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: outlineAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '50%'] }),
-                width: '50%',
-                height: 48,
-                borderRadius: 12,
-                borderWidth: 2,
-                borderColor: '#FB7A20',
-                backgroundColor: 'transparent',
-                zIndex: 0,
-              }}
-            />
-            <TouchableOpacity
-              style={[tabButton(tab === 'email'), { zIndex: 1, position: 'relative', flex: 1 }]}
-              onPress={() => {
-                if (tab !== 'email') {
-                  setTab('email');
-                  setStep('input');
-                  setError('');
-                  Animated.timing(outlineAnim, {
-                    toValue: 0,
-                    duration: 250,
-                    easing: Easing.out(Easing.exp),
-                    useNativeDriver: false,
-                  }).start();
-                }
-              }}
-            >
-              <CustomText style={{ color: tab === 'email' ? '#3A3A3A' : '#7A7A7A', fontWeight: '600', fontSize: 16 }}>Email</CustomText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[tabButton(tab === 'phone'), { zIndex: 1, position: 'relative', flex: 1 }]}
-              onPress={() => {
-                if (tab !== 'phone') {
-                  setTab('phone');
-                  setStep('input');
-                  setError('');
-                  Animated.timing(outlineAnim, {
-                    toValue: 1,
-                    duration: 250,
-                    easing: Easing.out(Easing.exp),
-                    useNativeDriver: false,
-                  }).start();
-                }
-              }}
-            >
-              <CustomText style={{ color: tab === 'phone' ? '#3A3A3A' : '#7A7A7A', fontWeight: '600', fontSize: 16 }}>Phone</CustomText>
-            </TouchableOpacity>
-          </View>
-          <View style={loginStyles.formContainer}>
-            {/* Email or Phone Input (always visible) */}
-            {tab === 'email' && (
-              <View style={loginStyles.inputContainer}>
-                <AntDesign name="mail" size={20} color="#FB7A20" style={loginStyles.inputIcon} />
-                <TextInput
-                  placeholder="Email"
-                  style={loginStyles.input}
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  editable={!loading}
-                  placeholderTextColor="#aaa"
-                  maxLength={30}
-                />
-              </View>
-            )}
-            {tab === 'phone' && (
-              <View style={loginStyles.inputContainer}>
-                <AntDesign name="phone" size={20} color="#FB7A20" style={loginStyles.inputIcon} />
-                <TextInput
-                  placeholder="Phone"
-                  style={loginStyles.input}
-                  value={formatPhoneNumber(phone)}
-                  onChangeText={text => setPhone(text.replace(/\D/g, '').slice(0, 10))}
-                  keyboardType="phone-pad"
-                  autoCapitalize="none"
-                  editable={!loading}
-                  placeholderTextColor="#aaa"
-                />
-              </View>
-            )}
-            {/* Next button (only if password not shown yet) */}
-            {step === 'input' && (
+          <BlurView
+            intensity={40}
+            tint="light"
+            style={{
+              borderTopLeftRadius: 32,
+              borderTopRightRadius: 32,
+              borderBottomLeftRadius: 16,
+              borderBottomRightRadius: 16,
+              paddingHorizontal: 32,
+              paddingTop: 32,
+              paddingBottom: 32,
+              flex: 1,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -8 },
+              shadowOpacity: 0.18,
+              shadowRadius: 24,
+              elevation: 18,
+              alignItems: 'center',
+              justifyContent: 'flex-start',
+              width: MODAL_WIDTH,
+              overflow: 'hidden',
+              backgroundColor: 'rgba(255,255,255,0.55)',
+            }}
+          >
+            {/* Welcome Text */}
+            <View style={loginStyles.textContainer}>
+              <CustomText variant="title" weight="bold" style={loginStyles.title}>
+                Welcome Back!
+              </CustomText>
+              <CustomText variant="subtitle" weight="medium" style={loginStyles.subtitle}>
+                Login to your Punch account
+              </CustomText>
+            </View>
+            {/* Tab Switcher with Animated Orange Outline */}
+            <View style={{ flexDirection: 'row', width: '100%', marginBottom: 24, gap: 8, position: 'relative', height: 48 }}>
+              {/* Animated orange outline border */}
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: outlineAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '50%'] }),
+                  width: '50%',
+                  height: 48,
+                  borderRadius: 12,
+                  borderWidth: 2,
+                  borderColor: '#FB7A20',
+                  backgroundColor: 'transparent',
+                  zIndex: 0,
+                }}
+              />
               <TouchableOpacity
-                style={[loginStyles.loginButton, loading && loginStyles.loginButtonDisabled]}
-                onPress={handleNext}
-                disabled={loading}
+                style={[tabButton(tab === 'email'), { zIndex: 1, position: 'relative', flex: 1 }]}
+                onPress={() => {
+                  if (tab !== 'email') {
+                    setTab('email');
+                    setStep('input');
+                    setError('');
+                    Animated.timing(outlineAnim, {
+                      toValue: 0,
+                      duration: 250,
+                      easing: Easing.out(Easing.exp),
+                      useNativeDriver: false,
+                    }).start();
+                  }
+                }}
               >
-                <CustomText variant="button" weight="bold" style={loginStyles.loginButtonText}>
-                  Next
-                </CustomText>
+                <CustomText style={{ color: tab === 'email' ? '#3A3A3A' : '#7A7A7A', fontWeight: '600', fontSize: 16 }}>Email</CustomText>
               </TouchableOpacity>
-            )}
-            {/* Password and Login (animated slide in) */}
-            <Animated.View style={{
-              opacity: step === 'password' ? 1 : 0,
-              transform: [{ translateY: anim }],
-              width: '100%',
-              position: 'relative',
-            }} pointerEvents={step === 'password' ? 'auto' : 'none'}>
-              {step === 'password' && (
-                <>
-                  <View style={loginStyles.inputContainer}>
-                    <AntDesign name="lock" size={20} color="#FB7A20" style={loginStyles.inputIcon} />
-                    <TextInput
-                      placeholder="Password"
-                      style={[loginStyles.input, { flex: 1 }]}
-                      value={password}
-                      onChangeText={setPassword}
-                      secureTextEntry={!showPassword}
-                      editable={!loading}
-                      placeholderTextColor="#aaa"
-                      maxLength={30}
-                    />
+              <TouchableOpacity
+                style={[tabButton(tab === 'phone'), { zIndex: 1, position: 'relative', flex: 1 }]}
+                onPress={() => {
+                  if (tab !== 'phone') {
+                    setTab('phone');
+                    setStep('input');
+                    setError('');
+                    Animated.timing(outlineAnim, {
+                      toValue: 1,
+                      duration: 250,
+                      easing: Easing.out(Easing.exp),
+                      useNativeDriver: false,
+                    }).start();
+                  }
+                }}
+              >
+                <CustomText style={{ color: tab === 'phone' ? '#3A3A3A' : '#7A7A7A', fontWeight: '600', fontSize: 16 }}>Phone</CustomText>
+              </TouchableOpacity>
+            </View>
+            <View style={loginStyles.formContainer}>
+              {/* Email or Phone Input (always visible) */}
+              {tab === 'email' && (
+                <View style={loginStyles.inputContainer}>
+                  <AntDesign name="mail" size={20} color="#FB7A20" style={loginStyles.inputIcon} />
+                  <TextInput
+                    placeholder="Email"
+                    style={loginStyles.input}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    editable={!loading}
+                    placeholderTextColor="#aaa"
+                    maxLength={30}
+                  />
+                </View>
+              )}
+              {tab === 'phone' && (
+                <View style={loginStyles.inputContainer}>
+                  <AntDesign name="phone" size={20} color="#FB7A20" style={loginStyles.inputIcon} />
+                  <TextInput
+                    placeholder="Phone"
+                    style={loginStyles.input}
+                    value={formatPhoneNumber(phone)}
+                    onChangeText={text => setPhone(text.replace(/\D/g, '').slice(0, 10))}
+                    keyboardType="phone-pad"
+                    autoCapitalize="none"
+                    editable={!loading}
+                    placeholderTextColor="#aaa"
+                  />
+                </View>
+              )}
+              {/* Next button (only if password not shown yet) */}
+              {step === 'input' && (
+                <TouchableOpacity
+                  style={[loginStyles.loginButton, loading && loginStyles.loginButtonDisabled]}
+                  onPress={handleNext}
+                  disabled={loading}
+                >
+                  <CustomText variant="button" weight="bold" style={loginStyles.loginButtonText}>
+                    Next
+                  </CustomText>
+                </TouchableOpacity>
+              )}
+              {/* Password and Login (animated slide in) */}
+              <Animated.View style={{
+                opacity: step === 'password' ? 1 : 0,
+                transform: [{ translateY: anim }],
+                width: '100%',
+                position: 'relative',
+              }} pointerEvents={step === 'password' ? 'auto' : 'none'}>
+                {step === 'password' && (
+                  <>
+                    <View style={loginStyles.inputContainer}>
+                      <AntDesign name="lock" size={20} color="#FB7A20" style={loginStyles.inputIcon} />
+                      <TextInput
+                        placeholder="Password"
+                        style={[loginStyles.input, { flex: 1 }]}
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry={!showPassword}
+                        editable={!loading}
+                        placeholderTextColor="#aaa"
+                        maxLength={30}
+                      />
+                      <TouchableOpacity
+                        onPress={() => setShowPassword((prev) => !prev)}
+                        style={{ padding: 4 }}
+                        accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? (
+                          <Feather name="eye-off" size={20} color="#FB7A20" />
+                        ) : (
+                          <Feather name="eye" size={20} color="#FB7A20" />
+                        )}
+                      </TouchableOpacity>
+                    </View>
                     <TouchableOpacity
-                      onPress={() => setShowPassword((prev) => !prev)}
-                      style={{ padding: 4 }}
-                      accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                      style={[loginStyles.loginButton, loading && loginStyles.loginButtonDisabled]}
+                      onPress={handleLogin}
+                      disabled={loading}
                     >
-                      {showPassword ? (
-                        <Feather name="eye-off" size={20} color="#FB7A20" />
+                      {loading ? (
+                        <ActivityIndicator size="small" color="white" />
                       ) : (
-                        <Feather name="eye" size={20} color="#FB7A20" />
+                        <CustomText variant="button" weight="bold" style={loginStyles.loginButtonText}>
+                          Log in
+                        </CustomText>
                       )}
                     </TouchableOpacity>
-                  </View>
-                  <TouchableOpacity
-                    style={[loginStyles.loginButton, loading && loginStyles.loginButtonDisabled]}
-                    onPress={handleLogin}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <ActivityIndicator size="small" color="white" />
-                    ) : (
-                      <CustomText variant="button" weight="bold" style={loginStyles.loginButtonText}>
-                        Log in
-                      </CustomText>
-                    )}
-                  </TouchableOpacity>
-                </>
-              )}
-            </Animated.View>
-            {error ? (
-              <View style={loginStyles.errorContainer}>
-                <AntDesign name="exclamationcircleo" size={16} color="#FB7A20" />
-                <CustomText variant="body" weight="medium" style={loginStyles.errorText}>
-                  {error}
-                </CustomText>
-              </View>
-            ) : null}
-          </View>
-          {/* Sign Up Link */}
-          <View style={loginStyles.signupContainer}>
-            <CustomText variant="body" weight="normal" style={loginStyles.signupText}>
-              {"Don't have an account? "}
-            </CustomText>
-            <TouchableOpacity onPress={() => router.push('../unauthenticated_tabs/signup')}>
-              <CustomText variant="body" weight="bold" style={loginStyles.signupLink}>
-                Sign Up
+                  </>
+                )}
+              </Animated.View>
+              {error ? (
+                <View style={loginStyles.errorContainer}>
+                  <AntDesign name="exclamationcircleo" size={16} color="#FB7A20" />
+                  <CustomText variant="body" weight="medium" style={loginStyles.errorText}>
+                    {error}
+                  </CustomText>
+                </View>
+              ) : null}
+            </View>
+            {/* Sign Up Link */}
+            <View style={loginStyles.signupContainer}>
+              <CustomText variant="body" weight="normal" style={loginStyles.signupText}>
+                {"Don't have an account? "}
               </CustomText>
-            </TouchableOpacity>
-          </View>
-        </View>
+              <TouchableOpacity onPress={() => router.push('../unauthenticated_tabs/signup')}>
+                <CustomText variant="body" weight="bold" style={loginStyles.signupLink}>
+                  Sign Up
+                </CustomText>
+              </TouchableOpacity>
+            </View>
+          </BlurView>
+        </Animated.View>
       </View>
     </KeyboardAvoidingView>
   );

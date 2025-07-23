@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Animated, Easing, Dimensions, Keyboard, TouchableWithoutFeedback, Switch, KeyboardAvoidingView, Platform, Linking } from 'react-native';
+import { View, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Animated, Easing, Keyboard, TouchableWithoutFeedback, Switch, KeyboardAvoidingView, Platform, Linking, Dimensions } from 'react-native';
 // Custom Checkbox
 function CustomCheckbox({ value, onValueChange }: { value: boolean; onValueChange: (v: boolean) => void }) {
   return (
@@ -29,8 +29,64 @@ import { setDoc, doc, getDocs, collection, query, where } from 'firebase/firesto
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomText from '../../components/CustomText';
 import { AntDesign } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import onboardingStyles from '../styles/onboardingStyles';
+import Svg, { Path, Circle, G } from 'react-native-svg';
+import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
+import { KeyboardEvent } from 'react-native';
 
-// Remove bio step, combine email/phone into one step
+const { width } = Dimensions.get('window');
+const MODAL_WIDTH = width - 48;
+const MODAL_HEIGHT = 420;
+
+function CircularProgressWithLogo({ progress }: { progress: number }) {
+  const size = 120;
+  const strokeWidth = 6;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const animatedStroke = circumference * (1 - progress);
+  return (
+    <View style={{ alignItems: 'center', justifyContent: 'center', marginBottom: 32 }}>
+      <View style={{ position: 'relative', width: size, height: size }}>
+        <Svg width={size} height={size}>
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={'rgba(255,255,255,0.25)'}
+            strokeWidth={strokeWidth}
+            fill="none"
+          />
+          <Path
+            stroke="#FB7A20"
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={animatedStroke}
+            d={`M${size / 2},${size / 2} m0,-${radius} a${radius},${radius} 0 1,1 0,${2 * radius} a${radius},${radius} 0 1,1 0,-${2 * radius}`}
+          />
+        </Svg>
+        <View style={{
+          position: 'absolute',
+          left: size / 2 - 40,
+          top: size / 2 - 40,
+          width: 80,
+          height: 80,
+          borderRadius: 40,
+          backgroundColor: 'white',
+          alignItems: 'center',
+          justifyContent: 'center',
+          alignSelf: 'center',
+        }}>
+          <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={{ width: 48, height: 48, resizeMode: 'contain' }} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// Update the password step prompt
 const steps = [
   {
     key: 'name',
@@ -38,13 +94,6 @@ const steps = [
     placeholder: 'Your full name',
     icon: 'user',
     validate: (val: string) => val.trim().length > 1 || 'Please enter your name.',
-  },
-  {
-    key: 'username',
-    prompt: "Nice to meet you! What should we call you? (Pick a username)",
-    placeholder: 'Username',
-    icon: 'tag',
-    validate: (val: string) => val.trim().length > 2 || 'Username must be at least 3 characters.',
   },
   {
     key: 'contact',
@@ -58,15 +107,11 @@ const steps = [
   },
   {
     key: 'password',
-    prompt: "Set a password to keep your account safe.",
+    prompt: "Finally, set a password to keep your account safe.",
     placeholder: 'Password',
     icon: 'lock',
     secure: true,
     validate: (val: string) => val.length >= 6 || 'Password should be at least 6 characters.',
-  },
-  {
-    key: 'summary',
-    prompt: "All set! Let's review your info before creating your account.",
   },
 ];
 
@@ -95,158 +140,55 @@ function getFriendlyErrorMessage(errorCode: string) {
 export default function SignupScreen() {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState({ name: '', username: '', email: '', phone: '', password: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
   const [mode, setMode] = useState<'email' | 'phone'>('email');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [usernameCheck, setUsernameCheck] = useState<'idle' | 'checking' | 'taken' | 'available'>('idle');
-  const anim = useState(new Animated.Value(0))[0];
-  // Typewriter effect
-  const [typedPrompt, setTypedPrompt] = useState('');
-  const promptTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [agree, setAgree] = useState(false);
   const [notifEmail, setNotifEmail] = useState(true);
   const [notifText, setNotifText] = useState(false);
+  // Remove modalVisible state and logic
+  // Remove the setTimeout for modalVisible in useEffect
+  // Always render the modal when SignupScreen is mounted
+  const modalAnim = useRef(new Animated.Value(MODAL_HEIGHT + 80)).current;
+  const keyboardOffset = 80; // how much to move modal up when keyboard is open
 
-  // Animate step transitions
-  const animateStep = () => {
-    anim.setValue(0);
-    Animated.timing(anim, {
-      toValue: 1,
-      duration: 350,
-      easing: Easing.out(Easing.exp),
+  useEffect(() => {
+    // Animate modal in (fly up) only when component is mounted
+    Animated.spring(modalAnim, {
+      toValue: 0,
       useNativeDriver: true,
+      friction: 7,
+      tension: 60,
     }).start();
-  };
 
-  // Typewriter effect for prompt
-  useEffect(() => {
-    const current = steps[step];
-    setTypedPrompt('');
-    if (promptTimeout.current) clearTimeout(promptTimeout.current);
-    let i = 0;
-    function typeNext() {
-      setTypedPrompt(current.prompt.slice(0, i));
-      if (i <= current.prompt.length) {
-        promptTimeout.current = setTimeout(typeNext, 18 + Math.random() * 30);
-        i++;
-      }
-    }
-    typeNext();
-    return () => {
-      if (promptTimeout.current) clearTimeout(promptTimeout.current);
+    // Keyboard listeners
+    const handleKeyboardShow = (e: KeyboardEvent) => {
+      Animated.timing(modalAnim, {
+        toValue: -keyboardOffset,
+        duration: 300,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.cubic),
+      }).start();
     };
-  }, [step]);
-
-  // Username check
-  const checkUsername = async (username: string) => {
-    setUsernameCheck('checking');
-    const querySnapshot = await getDocs(query(collection(db, 'users'), where('username', '==', username)));
-    if (!querySnapshot.empty) {
-      setUsernameCheck('taken');
-      setError('This username is already taken.');
-      return false;
-    }
-    setUsernameCheck('available');
-    setError('');
-    return true;
-  };
-
-  // Handle next step
-  const handleNext = async () => {
-    setError('');
-    const current = steps[step];
-    const value = form[current.key as keyof typeof form];
-    if (current.key === 'username') {
-      if (typeof current.validate === 'function') {
-        const valid = current.validate(value);
-        if (valid !== true) {
-          setError(typeof valid === 'string' ? valid : 'Please enter a username.');
-          return;
-        }
-      }
-      const ok = await checkUsername(value);
-      if (!ok) return;
-      setStep(step + 1);
-      animateStep();
-      return;
-    }
-    if (current.key === 'contact') {
-      if (typeof current.validate === 'function') {
-        const valid = current.validate(form);
-        if (valid !== true) {
-          setError(typeof valid === 'string' ? valid : 'Please fill this in.');
-          return;
-        }
-      }
-      setStep(step + 1);
-      animateStep();
-      return;
-    }
-    if (typeof current.validate === 'function') {
-      const valid = current.validate(value);
-      if (valid !== true) {
-        setError(typeof valid === 'string' ? valid : 'Please fill this in.');
-        return;
-      }
-    }
-    setStep(step + 1);
-    animateStep();
-  };
-
-  // Handle back
-  const handleBack = () => {
-    if (step === 0) {
-      router.replace('/unauthenticated_tabs/onboarding');
-      return;
-    }
-    setError('');
-    setStep(step - 1);
-    animateStep();
-  };
-
-  // Handle signup
-  const handleSignup = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, form.email, form.password);
-      const user = userCredential.user;
-      await setDoc(doc(db, 'users', user.uid), {
-        uid: user.uid,
-        name: form.name,
-        username: form.username,
-        bio: '', // Removed bio
-        profilePictureUrl: '',
-        storesVisitedCount: 0,
-        storesVisitedHistory: [],
-        rewardsRedeemed: [],
-        followersCount: 0,
-        followingCount: 0,
-        followerUids: [],
-        followingUids: [],
-        emailNotifications: notifEmail, // Added email notifications
-        textNotifications: notifText, // Added text notifications
-      });
-      router.replace('../authenticated_tabs/home');
-    } catch (err: any) {
-      setError(getFriendlyErrorMessage(err.code));
-    }
-    setLoading(false);
-  };
-
-  // Animated progress bar
-  const progressAnim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(progressAnim, {
-      toValue: (step + 1) / steps.length,
-      duration: 500,
-      useNativeDriver: false,
-    }).start();
-  }, [step]);
+    const handleKeyboardHide = () => {
+      Animated.timing(modalAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.cubic),
+      }).start();
+    };
+    const showSub = Keyboard.addListener('keyboardDidShow', handleKeyboardShow);
+    const hideSub = Keyboard.addListener('keyboardDidHide', handleKeyboardHide);
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Step content
-  const current = steps[step];
+  const current = steps[step] || steps[steps.length - 1];
   const isSummary = current.key === 'summary';
 
   // Tab switcher for contact method
@@ -281,33 +223,93 @@ export default function SignupScreen() {
     </View>
   );
 
+  const handleNext = async () => {
+    setError('');
+    const current = steps[step];
+    const value = form[current.key as keyof typeof form];
+    if (current.key === 'contact') {
+      if (typeof current.validate === 'function') {
+        const valid = current.validate(form);
+        if (valid !== true) {
+          setError(typeof valid === 'string' ? valid : 'Please fill this in.');
+          return;
+        }
+      }
+      if (step < steps.length - 1) {
+        setStep(step + 1);
+      }
+      return;
+    }
+    if (typeof current.validate === 'function') {
+      const valid = current.validate(value);
+      if (valid !== true) {
+        setError(typeof valid === 'string' ? valid : 'Please fill this in.');
+        return;
+      }
+    }
+    if (step < steps.length - 1) {
+      setStep(step + 1);
+    }
+  };
+
+  const handleBack = () => {
+    if (step === 0) {
+      // Animate signup modal down before navigating back to onboarding
+      Animated.timing(modalAnim, {
+        toValue: MODAL_HEIGHT + 80,
+        duration: 500,
+        useNativeDriver: true,
+        easing: Easing.inOut(Easing.cubic),
+      }).start(() => {
+        router.replace('/unauthenticated_tabs/onboarding?fromSignup=1');
+      });
+      return;
+    }
+    setError('');
+    setStep(step - 1);
+  };
+
+  const handleSignup = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      const user = userCredential.user;
+      await setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        name: form.name,
+        bio: '', // Removed bio
+        profilePictureUrl: '',
+        storesVisitedCount: 0,
+        storesVisitedHistory: [],
+        rewardsRedeemed: [],
+        followersCount: 0,
+        followingCount: 0,
+        followerUids: [],
+        followingUids: [],
+        emailNotifications: notifEmail, // Added email notifications
+        textNotifications: notifText, // Added text notifications
+      });
+      router.replace('../authenticated_tabs/home');
+    } catch (err: any) {
+      setError(getFriendlyErrorMessage(err.code));
+    }
+    setLoading(false);
+  };
+
   return (
     // soft peachy background
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={[styles.container, { backgroundColor: '#FFF7F2' }]}>
-        <SafeAreaView style={styles.safeArea}>
+      <View style={[onboardingStyles.container, { backgroundColor: '#FFF7F2' }]}> {/* Use onboardingStyles */}
+        <AnimatedBubblesBackground />
+        <SafeAreaView style={onboardingStyles.safeArea}>
           {/* Back Button at top left of screen */}
           <TouchableOpacity style={styles.backButtonScreen} onPress={handleBack}>
             <AntDesign name="arrowleft" size={28} color="#FB7A20" />
           </TouchableOpacity>
-          {/* Logo above card */}
-          <View style={styles.logoContainer}>
-            <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={styles.logo} />
-          </View>
-          {/* Animated progress bar above card */}
-          <View style={styles.progressBarWrap}>
-            <Animated.View
-              style={{
-                height: 6,
-                backgroundColor: '#FB7A20',
-                width: progressAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0%', '100%'],
-                }),
-                borderTopLeftRadius: 8,
-                borderTopRightRadius: 8,
-              }}
-            />
+          {/* Logo and circular progress above card */}
+          <View style={{ alignItems: 'center', justifyContent: 'center', marginBottom: 32 }}>
+            <CircularProgressWithLogo progress={(step + 1) / steps.length} />
           </View>
           {/* Card/modal effect for the form, wrapped in KeyboardAvoidingView */}
           <KeyboardAvoidingView
@@ -315,19 +317,46 @@ export default function SignupScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
           >
-            <View style={styles.cardModalFull}>
-              <Animated.View
+            <Animated.View style={{
+              position: 'absolute',
+              left: 24,
+              right: 24,
+              bottom: 0,
+              width: MODAL_WIDTH,
+              zIndex: 10,
+              minHeight: MODAL_HEIGHT,
+              backgroundColor: 'transparent',
+              justifyContent: 'flex-end',
+              alignSelf: 'center',
+              transform: [{ translateY: modalAnim }],
+            }}>
+              <BlurView
+                intensity={40}
+                tint="light"
                 style={{
-                  width: '100%',
+                  borderTopLeftRadius: 32,
+                  borderTopRightRadius: 32,
+                  borderBottomLeftRadius: 16,
+                  borderBottomRightRadius: 16,
+                  paddingHorizontal: 32,
+                  paddingTop: 32,
+                  paddingBottom: 32,
+                  flex: 1,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: -8 },
+                  shadowOpacity: 0.18,
+                  shadowRadius: 24,
+                  elevation: 18,
                   alignItems: 'center',
-                  opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
-                  transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }],
+                  justifyContent: 'flex-start',
+                  width: MODAL_WIDTH,
+                  overflow: 'hidden',
+                  backgroundColor: 'rgba(255,255,255,0.55)',
                 }}
               >
-                {/* Animated typewriter prompt */}
+                {/* Animated typewriter prompt and all step content here (move from Animated.View) */}
                 <CustomText variant="title" weight="bold" style={styles.prompt}>
-                  {typedPrompt}
-                  <Animated.Text style={{ opacity: 0.7, fontSize: 22, color: '#FB7A20' }}>|</Animated.Text>
+                  {current.prompt}
                 </CustomText>
                 {/* Name step: show name input */}
                 {current.key === 'name' && (
@@ -349,6 +378,58 @@ export default function SignupScreen() {
                       returnKeyType="next"
                     />
                   </View>
+                )}
+                {/* Password step: show password input */}
+                {current.key === 'password' && (
+                  <>
+                    <View style={styles.inputContainer}>
+                      <AntDesign name="lock" size={20} color="#FB7A20" style={styles.inputIconCentered} />
+                      <TextInput
+                        placeholder="Password"
+                        style={styles.input}
+                        value={form.password}
+                        onChangeText={text => {
+                          setForm({ ...form, password: text });
+                          setError('');
+                        }}
+                        autoCapitalize="none"
+                        placeholderTextColor="#aaa"
+                        secureTextEntry={true}
+                        editable={!loading}
+                        maxLength={30}
+                        onSubmitEditing={handleNext}
+                        returnKeyType="done"
+                      />
+                    </View>
+                    {/* Terms and Privacy checkbox */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 8 }}>
+                      <CustomCheckbox value={agree} onValueChange={setAgree} />
+                      <CustomText style={{ marginLeft: 8, color: '#222' }}>
+                        I agree to <CustomText style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://your-terms-url.com')}>Terms of Service</CustomText> & <CustomText style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://your-privacy-url.com')}>Privacy Policy</CustomText>
+                      </CustomText>
+                    </View>
+                    {/* Back and Create Account buttons in the same row */}
+                    <View style={styles.buttonRow}>
+                      {step > 0 && (
+                        <TouchableOpacity style={styles.secondaryButton} onPress={handleBack} disabled={loading}>
+                          <CustomText variant="button" weight="bold" style={styles.secondaryButtonText}>Back</CustomText>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        style={[styles.signupButton, (!agree || loading || !(form.password && form.password.length >= 6)) && styles.signupButtonDisabled]}
+                        onPress={handleSignup}
+                        disabled={!agree || loading || !(form.password && form.password.length >= 6)}
+                      >
+                        {loading ? (
+                          <ActivityIndicator size="small" color="#FB7A20" />
+                        ) : (
+                          <CustomText variant="button" weight="bold" style={styles.signupButtonText}>
+                            Create Account
+                          </CustomText>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </>
                 )}
                 {/* Contact step: show both email and phone fields */}
                 {current.key === 'contact' && (
@@ -406,15 +487,6 @@ export default function SignupScreen() {
                     </View>
                   </View>
                 )}
-                {/* Terms and Privacy checkbox */}
-                {current.key === 'summary' && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 8 }}>
-                    <CustomCheckbox value={agree} onValueChange={setAgree} />
-                    <CustomText style={{ marginLeft: 8, color: '#222' }}>
-                      I agree to <CustomText style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://your-terms-url.com')}>Terms of Service</CustomText> & <CustomText style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://your-privacy-url.com')}>Privacy Policy</CustomText>
-                    </CustomText>
-                  </View>
-                )}
                 {/* Error message */}
                 {error ? (
                   <View style={styles.errorContainer}>
@@ -425,61 +497,40 @@ export default function SignupScreen() {
                   </View>
                 ) : null}
                 {/* Step navigation */}
-                <View style={styles.buttonRow}>
-                  {step > 0 && !isSummary && (
-                    <TouchableOpacity style={styles.secondaryButton} onPress={handleBack} disabled={loading}>
-                      <CustomText variant="button" weight="bold" style={styles.secondaryButtonText}>Back</CustomText>
-                    </TouchableOpacity>
-                  )}
-                  {!isSummary && (
+                {/* On the name step, show only Next (disabled unless valid), no Back */}
+                {current.key === 'name' && (
+                  <View style={styles.buttonRow}>
                     <TouchableOpacity
-                      style={[styles.nextButton, loading && styles.nextButtonDisabled]}
+                      style={[styles.nextButton, (loading || !(form.name && form.name.trim().length > 1)) && styles.nextButtonDisabled]}
                       onPress={handleNext}
-                      disabled={loading}
+                      disabled={loading || !(form.name && form.name.trim().length > 1)}
                     >
                       <CustomText variant="button" weight="bold" style={styles.nextButtonText}>
                         Next
                       </CustomText>
                     </TouchableOpacity>
-                  )}
-                  {isSummary && (
-                    <TouchableOpacity
-                      style={[styles.signupButton, (!agree || loading) && styles.signupButtonDisabled]}
-                      onPress={handleSignup}
-                      disabled={!agree || loading}
-                    >
-                      {loading ? (
-                        <ActivityIndicator size="small" color="#FB7A20" />
-                      ) : (
-                        <CustomText variant="button" weight="bold" style={styles.signupButtonText}>
-                          Create Account
-                        </CustomText>
-                      )}
-                    </TouchableOpacity>
-                  )}
-                </View>
-                {/* Summary */}
-                {isSummary && (
-                  <View style={styles.summaryBox}>
-                    <CustomText variant="body" weight="semibold" style={{ marginBottom: 8 }}>
-                      <AntDesign name="user" size={16} color="#FB7A20" />  {form.name}
-                    </CustomText>
-                    <CustomText variant="body" weight="semibold" style={{ marginBottom: 8 }}>
-                      <AntDesign name="tag" size={16} color="#FB7A20" />  @{form.username}
-                    </CustomText>
-                    <CustomText variant="body" weight="normal" style={{ marginBottom: 8 }}>
-                      <AntDesign name="mail" size={16} color="#FB7A20" />  {form.email}
-                    </CustomText>
-                    {form.phone ? (
-                      <CustomText variant="body" weight="normal" style={{ marginBottom: 8 }}>
-                        <AntDesign name="phone" size={16} color="#FB7A20" />  {formatPhoneNumber(form.phone)}
-                      </CustomText>
-                    ) : null}
-                    <CustomText variant="body" weight="normal" style={{ marginBottom: 8 }}>
-                      <AntDesign name="notification" size={16} color="#FB7A20" />  {notifEmail ? 'Email' : ''}{notifEmail && notifText ? ' & ' : ''}{notifText ? 'Text' : ''} notifications
-                    </CustomText>
                   </View>
                 )}
+                {/* On the contact step, show Back and Next (Next disabled unless valid) */}
+                {current.key === 'contact' && (
+                  <View style={styles.buttonRow}>
+                    {step > 0 && (
+                      <TouchableOpacity style={styles.secondaryButton} onPress={handleBack} disabled={loading}>
+                        <CustomText variant="button" weight="bold" style={styles.secondaryButtonText}>Back</CustomText>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={[styles.nextButton, (loading || !form.email || !/.+@.+\..+/.test(form.email)) && styles.nextButtonDisabled]}
+                      onPress={handleNext}
+                      disabled={loading || !form.email || !/.+@.+\..+/.test(form.email)}
+                    >
+                      <CustomText variant="button" weight="bold" style={styles.nextButtonText}>
+                        Next
+                      </CustomText>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                {/* On the password step, do not render Back or Next buttons */}
                 {/* Login Link inside modal */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 24 }}>
                   <CustomText variant="body" weight="normal" style={styles.loginText}>
@@ -491,8 +542,8 @@ export default function SignupScreen() {
                     </CustomText>
                   </TouchableOpacity>
                 </View>
-              </Animated.View>
-            </View>
+              </BlurView>
+            </Animated.View>
           </KeyboardAvoidingView>
         </SafeAreaView>
       </View>
