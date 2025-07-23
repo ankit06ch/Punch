@@ -23,7 +23,7 @@ const { width } = Dimensions.get('window');
 const onboardingData = [
   {
     id: 1,
-    headline: 'Earn Punches. Get Rewards.',
+    headline: 'Earn Rewards.',
     subheadline: '',
     description: '',
   },
@@ -35,9 +35,9 @@ const onboardingData = [
   },
   {
     id: 3,
-    headline: 'Earn Punches. Get Rewards.',
-    subheadline: 'Every visit earns a punch. Hit the goal, unlock your reward — it\'s that easy.',
-    description: 'From free drinks to surprise drops.',
+    headline: 'Every visit earns a punch.',
+    subheadline: 'Hit the goal, unlock your reward — it\'s that easy.',
+    description: '',
   },
   {
     id: 4,
@@ -175,6 +175,15 @@ function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext,
   const insets = useSafeAreaInsets();
   const MODAL_WIDTH = width - 48; // 24px margin on each side
   const MODAL_HEIGHT = 280;
+  // Animated progress bar
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: (currentIndex + 1) / onboardingData.length,
+      duration: 500,
+      useNativeDriver: false,
+    }).start();
+  }, [currentIndex, onboardingData.length]);
   return (
     <Animated.View style={{
       position: 'absolute',
@@ -189,6 +198,21 @@ function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext,
       alignSelf: 'center',
       transform: [{ translateY: modalAnim }],
     }}>
+     {/* Animated progress bar */}
+     <View style={{ width: '100%', height: 6, backgroundColor: '#f3e1d2', borderTopLeftRadius: 8, borderTopRightRadius: 8, overflow: 'hidden', marginBottom: 8 }}>
+       <Animated.View
+         style={{
+           height: 6,
+           backgroundColor: '#FB7A20',
+           width: progressAnim.interpolate({
+             inputRange: [0, 1],
+             outputRange: ['0%', '100%'],
+           }),
+           borderTopLeftRadius: 8,
+           borderTopRightRadius: 8,
+         }}
+       />
+     </View>
       <BlurView
         intensity={40}
         tint="light"
@@ -322,7 +346,7 @@ export default function Onboarding() {
   };
 
   return (
-    <View style={[onboardingStyles.container, { flex: 1, backgroundColor: '#fff' }]}>
+    <View style={[onboardingStyles.container, { flex: 1, backgroundColor: '#FFF7F2' }]}>
       <StatusBar style="dark" translucent backgroundColor="transparent" />
       <AnimatedBubblesBackground />
       <OnboardingModal

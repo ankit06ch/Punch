@@ -2,7 +2,7 @@ import { AntDesign, Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Image, KeyboardAvoidingView, Platform, ScrollView, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Image, KeyboardAvoidingView, Platform, ScrollView, TextInput, TouchableOpacity, View, Dimensions } from 'react-native';
 
 import CustomText from '../../components/CustomText';
 import { auth } from '../../firebase/config';
@@ -20,6 +20,7 @@ export default function LoginScreen() {
   const [anim] = useState(new Animated.Value(60)); // For password slide up
   const outlineAnim = useRef(new Animated.Value(0)).current; // 0 for email, 1 for phone
   const [showPassword, setShowPassword] = useState(false);
+  const { width } = Dimensions.get('window');
 
   function getFriendlyErrorMessage(errorCode: string) {
     switch (errorCode) {
@@ -110,23 +111,42 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
-      <View style={loginStyles.container}>
-        <ScrollView contentContainerStyle={loginStyles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          {/* Back Arrow */}
-          <TouchableOpacity style={loginStyles.backButton} onPress={() => {
-            if (router.canGoBack && router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('../unauthenticated_tabs/onboarding');
-            }
-          }}>
-            <AntDesign name="arrowleft" size={28} color="#FB7A20" />
-          </TouchableOpacity>
-
-          {/* Logo and Welcome Text */}
-          <View style={loginStyles.logoContainer}>
-            <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={loginStyles.logo} />
-          </View>
+      <View style={{ flex: 1, backgroundColor: '#FFF7F2' }}>
+        {/* Back Arrow at top left */}
+        <TouchableOpacity style={[loginStyles.backButton, { position: 'absolute', top: 16, left: 16, zIndex: 20, backgroundColor: 'rgba(255,255,255,0.12)' }]} onPress={() => {
+          if (router.canGoBack && router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('../unauthenticated_tabs/onboarding');
+          }
+        }}>
+          <AntDesign name="arrowleft" size={28} color="#FB7A20" />
+        </TouchableOpacity>
+        {/* Logo above card */}
+        <View style={{ alignItems: 'center', justifyContent: 'center', marginTop: 28, marginBottom: 12 }}>
+          <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={{ width: 64, height: 64, resizeMode: 'contain' }} />
+        </View>
+        {/* Card/modal effect for the form */}
+        <View style={{
+          backgroundColor: 'rgba(255,255,255,0.98)',
+          borderRadius: 28,
+          padding: 28,
+          marginHorizontal: 16,
+          marginTop: 0,
+          marginBottom: 16,
+          shadowColor: '#FB7A20',
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.10,
+          shadowRadius: 24,
+          elevation: 12,
+          alignSelf: 'center',
+          width: '94%',
+          maxWidth: 420,
+          minHeight: 320,
+          alignItems: 'center',
+          position: 'relative',
+        }}>
+          {/* Welcome Text */}
           <View style={loginStyles.textContainer}>
             <CustomText variant="title" weight="bold" style={loginStyles.title}>
               Welcome Back!
@@ -135,7 +155,6 @@ export default function LoginScreen() {
               Login to your Punch account
             </CustomText>
           </View>
-
           {/* Tab Switcher with Animated Orange Outline */}
           <View style={{ flexDirection: 'row', width: '100%', marginBottom: 24, gap: 8, position: 'relative', height: 48 }}>
             {/* Animated orange outline border */}
@@ -190,7 +209,6 @@ export default function LoginScreen() {
               <CustomText style={{ color: tab === 'phone' ? '#3A3A3A' : '#7A7A7A', fontWeight: '600', fontSize: 16 }}>Phone</CustomText>
             </TouchableOpacity>
           </View>
-
           <View style={loginStyles.formContainer}>
             {/* Email or Phone Input (always visible) */}
             {tab === 'email' && (
@@ -294,7 +312,6 @@ export default function LoginScreen() {
               </View>
             ) : null}
           </View>
-
           {/* Sign Up Link */}
           <View style={loginStyles.signupContainer}>
             <CustomText variant="body" weight="normal" style={loginStyles.signupText}>
@@ -306,7 +323,7 @@ export default function LoginScreen() {
               </CustomText>
             </TouchableOpacity>
           </View>
-        </ScrollView>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
