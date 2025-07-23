@@ -1,7 +1,7 @@
-import { AntDesign } from '@expo/vector-icons';
+import { AntDesign, Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Image, KeyboardAvoidingView, Platform, ScrollView, TextInput, TouchableOpacity, View } from 'react-native';
 
 import CustomText from '../../components/CustomText';
@@ -17,7 +17,9 @@ export default function LoginScreen() {
   const [step, setStep] = useState<'input' | 'password'>('input');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [anim] = useState(new Animated.Value(60)); // Start 60px below
+  const [anim] = useState(new Animated.Value(60)); // For password slide up
+  const outlineAnim = useRef(new Animated.Value(0)).current; // 0 for email, 1 for phone
+  const [showPassword, setShowPassword] = useState(false);
 
   function getFriendlyErrorMessage(errorCode: string) {
     switch (errorCode) {
@@ -30,6 +32,16 @@ export default function LoginScreen() {
       default:
         return 'Login failed. Please try again.';
     }
+  }
+
+  // Helper to format phone number as 123-456-7890
+  function formatPhoneNumber(value: string) {
+    const digits = value.replace(/\D/g, '').slice(0, 10);
+    const parts = [];
+    if (digits.length > 0) parts.push(digits.slice(0, 3));
+    if (digits.length > 3) parts.push(digits.slice(3, 6));
+    if (digits.length > 6) parts.push(digits.slice(6, 10));
+    return parts.join('-');
   }
 
   const handleNext = () => {
@@ -85,12 +97,11 @@ export default function LoginScreen() {
   // Tab button styles
   const tabButton = (selected: boolean) => ({
     flex: 1,
-    backgroundColor: selected ? 'white' : 'rgba(0,0,0,0.08)',
+    backgroundColor: selected ? 'transparent' : '#f2f2f2',
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center' as const,
-    borderWidth: selected ? 1.5 : 0,
-    borderColor: selected ? '#FB7A20' : 'transparent',
+    borderWidth: 0,
   });
 
   return (
@@ -102,7 +113,13 @@ export default function LoginScreen() {
       <View style={loginStyles.container}>
         <ScrollView contentContainerStyle={loginStyles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {/* Back Arrow */}
-          <TouchableOpacity style={loginStyles.backButton} onPress={() => router.back()}>
+          <TouchableOpacity style={loginStyles.backButton} onPress={() => {
+            if (router.canGoBack && router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('../unauthenticated_tabs/onboarding');
+            }
+          }}>
             <AntDesign name="arrowleft" size={28} color="#FB7A20" />
           </TouchableOpacity>
 
@@ -119,12 +136,57 @@ export default function LoginScreen() {
             </CustomText>
           </View>
 
-          {/* Tab Switcher */}
-          <View style={{ flexDirection: 'row', width: '100%', marginBottom: 24, gap: 8 }}>
-            <TouchableOpacity style={tabButton(tab === 'email')} onPress={() => { setTab('email'); setStep('input'); setError(''); }}>
+          {/* Tab Switcher with Animated Orange Outline */}
+          <View style={{ flexDirection: 'row', width: '100%', marginBottom: 24, gap: 8, position: 'relative', height: 48 }}>
+            {/* Animated orange outline border */}
+            <Animated.View
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: outlineAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '50%'] }),
+                width: '50%',
+                height: 48,
+                borderRadius: 12,
+                borderWidth: 2,
+                borderColor: '#FB7A20',
+                backgroundColor: 'transparent',
+                zIndex: 0,
+              }}
+            />
+            <TouchableOpacity
+              style={[tabButton(tab === 'email'), { zIndex: 1, position: 'relative', flex: 1 }]}
+              onPress={() => {
+                if (tab !== 'email') {
+                  setTab('email');
+                  setStep('input');
+                  setError('');
+                  Animated.timing(outlineAnim, {
+                    toValue: 0,
+                    duration: 250,
+                    easing: Easing.out(Easing.exp),
+                    useNativeDriver: false,
+                  }).start();
+                }
+              }}
+            >
               <CustomText style={{ color: tab === 'email' ? '#3A3A3A' : '#7A7A7A', fontWeight: '600', fontSize: 16 }}>Email</CustomText>
             </TouchableOpacity>
-            <TouchableOpacity style={tabButton(tab === 'phone')} onPress={() => { setTab('phone'); setStep('input'); setError(''); }}>
+            <TouchableOpacity
+              style={[tabButton(tab === 'phone'), { zIndex: 1, position: 'relative', flex: 1 }]}
+              onPress={() => {
+                if (tab !== 'phone') {
+                  setTab('phone');
+                  setStep('input');
+                  setError('');
+                  Animated.timing(outlineAnim, {
+                    toValue: 1,
+                    duration: 250,
+                    easing: Easing.out(Easing.exp),
+                    useNativeDriver: false,
+                  }).start();
+                }
+              }}
+            >
               <CustomText style={{ color: tab === 'phone' ? '#3A3A3A' : '#7A7A7A', fontWeight: '600', fontSize: 16 }}>Phone</CustomText>
             </TouchableOpacity>
           </View>
@@ -143,6 +205,7 @@ export default function LoginScreen() {
                   autoCapitalize="none"
                   editable={!loading}
                   placeholderTextColor="#aaa"
+                  maxLength={30}
                 />
               </View>
             )}
@@ -152,8 +215,8 @@ export default function LoginScreen() {
                 <TextInput
                   placeholder="Phone"
                   style={loginStyles.input}
-                  value={phone}
-                  onChangeText={setPhone}
+                  value={formatPhoneNumber(phone)}
+                  onChangeText={text => setPhone(text.replace(/\D/g, '').slice(0, 10))}
                   keyboardType="phone-pad"
                   autoCapitalize="none"
                   editable={!loading}
@@ -186,13 +249,25 @@ export default function LoginScreen() {
                     <AntDesign name="lock" size={20} color="#FB7A20" style={loginStyles.inputIcon} />
                     <TextInput
                       placeholder="Password"
-                      style={loginStyles.input}
+                      style={[loginStyles.input, { flex: 1 }]}
                       value={password}
                       onChangeText={setPassword}
-                      secureTextEntry
+                      secureTextEntry={!showPassword}
                       editable={!loading}
                       placeholderTextColor="#aaa"
+                      maxLength={30}
                     />
+                    <TouchableOpacity
+                      onPress={() => setShowPassword((prev) => !prev)}
+                      style={{ padding: 4 }}
+                      accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? (
+                        <Feather name="eye-off" size={20} color="#FB7A20" />
+                      ) : (
+                        <Feather name="eye" size={20} color="#FB7A20" />
+                      )}
+                    </TouchableOpacity>
                   </View>
                   <TouchableOpacity
                     style={[loginStyles.loginButton, loading && loginStyles.loginButtonDisabled]}

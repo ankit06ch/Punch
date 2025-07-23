@@ -13,8 +13,6 @@ const loginStyles = StyleSheet.create({
     top: 16,
     left: 16,
     zIndex: 10,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 24,
     padding: 8,
   },
   content: {
@@ -55,8 +53,10 @@ const loginStyles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 12,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#6B7280', // match text gray
     marginBottom: 16,
     paddingHorizontal: 16,
     paddingVertical: 4,
@@ -66,9 +66,10 @@ const loginStyles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: 'black',
+    color: '#6B7280', // gray text
     fontSize: 16,
     paddingVertical: 16,
+    backgroundColor: 'white',
   },
   errorContainer: {
     flexDirection: 'row',
@@ -114,8 +115,8 @@ const loginStyles = StyleSheet.create({
     marginTop: 16,
   },
   signupText: {
-    color: '#888',
-    opacity: 0.8,
+    color: 'black',
+    opacity: 1,
   },
   signupLink: {
     color: '#FB7A20',
