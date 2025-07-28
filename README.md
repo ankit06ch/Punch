@@ -1,50 +1,57 @@
-# Welcome to your Expo app 👋
+🥊 Punch — Powering Loyalty for Local Businesses
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Punch is a cross-platform mobile app that connects small businesses through a shared rewards network, allowing them to unite, reward customers, and grow together — without needing to build their own loyalty infrastructure.
 
-## Get started
+✨ Think: earn points at your favorite local coffee shop, redeem them at the pizza place next door.
+🎯 It’s community-powered loyalty — built for small businesses, not tech giants.
 
-1. Install dependencies
+⸻
 
-   ```bash
-   npm install
-   ```
+🚀 Features
+	•	🎟️ Universal Token System
+Customers earn “Punch Tokens” at any participating business and redeem them across the entire network.
+	•	🧾 Transaction History & Live Balances
+Users can view past activity, track their earned/redeemed tokens, and stay engaged.
+	•	🛍️ Business Dashboard
+Local businesses get a backend interface to track customers, view redemptions, and monitor engagement — no extra hardware needed.
+	•	🔒 Secure & Scalable
+Built with Firebase Auth, MongoDB, and scalable architecture. Blockchain integration (coming soon) for transparent token flow.
+	•	📱 Smooth Cross-Platform Experience
+Built using React Native for iOS and Android — beautiful, modern UI designed with small businesses and customers in mind.
 
-2. Start the app
+⸻
 
-   ```bash
-   npx expo start
-   ```
+🧠 Why Punch?
 
-In the output, you'll find options to open the app in a
+Big brands like Starbucks dominate customer loyalty through sleek, digital-first tools. Meanwhile, small businesses are stuck with:
+	•	❌ Paper punch cards
+	•	❌ Disconnected systems
+	•	❌ High-cost, low-return loyalty apps
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+Punch flips the script.
+Instead of competing alone, small businesses can now team up in one unified loyalty network. It’s not just an app — it’s a movement to put power back in the hands of local communities.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+⸻
 
-## Get a fresh project
+🛠️ Built With
+	•	💻 React Native
+	•	🔐 Firebase Authentication
+	•	☁️ Firebase Firestore & Realtime Database
+	•	⚙️ Node.js (backend functions)
 
-When you're ready, run:
+⸻
 
-```bash
-npm run reset-project
-```
+📈 The Vision
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Punch is just getting started. We’re working toward:
+	•	🗺️ Geo-based discovery (Find nearby Punch-partnered businesses)
+	•	🤝 Business onboarding portal (Self-serve onboarding for shop owners)
+	•	📊 Advanced analytics (Business insights into loyalty behavior)
+	•	🌍 Local loyalty networks by neighborhood, city, or niche industry
 
-## Learn more
+⸻
 
-To learn more about developing your project with Expo, look at the following resources:
+🤝 Join the Movement
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Whether you’re a developer, designer, small business owner, or just someone who loves supporting local — Punch is for you.
+Let’s build a future where loyalty isn’t locked behind billion-dollar apps.
