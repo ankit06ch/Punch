@@ -16,11 +16,11 @@ const profileStyles = StyleSheet.create({
   },
   profileSection: { alignItems: 'center' },
   avatar: { width: 100, height: 100, borderRadius: 50, marginBottom: 8 },
-  username: { color: '#333', fontSize: 20, fontWeight: 'bold', marginBottom: 8 },
+  username: { color: '#333', fontSize: 20, fontWeight: 'bold', marginBottom: 8, fontFamily: 'Figtree_700Bold' },
   stats: { flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginVertical: 12 },
   statItem: { alignItems: 'center' },
-  statNumber: { color: '#333', fontSize: 18 },
-  statLabel: { color: 'gray', fontSize: 12 },
+  statNumber: { color: '#333', fontSize: 18, fontFamily: 'Figtree_600SemiBold' },
+  statLabel: { color: 'gray', fontSize: 12, fontFamily: 'Figtree_400Regular' },
   bioButton: {
     backgroundColor: '#fb7a20',
     paddingHorizontal: 16,
@@ -28,9 +28,9 @@ const profileStyles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 20,
   },
-  bioButtonText: { color: '#fff' },
+  bioButtonText: { color: '#fff', fontFamily: 'Figtree_500Medium' },
   storesContainer: { flex: 1 },
-  sectionHeader: { color: '#fb7a20', fontSize: 18, marginVertical: 10 },
+  sectionHeader: { color: '#fb7a20', fontSize: 18, marginVertical: 10, fontFamily: 'Figtree_600SemiBold' },
   storeItem: { color: '#333', paddingVertical: 5, paddingLeft: 10 },
   modalContainer: {
     backgroundColor: '#fff',           // pure white for a clean look
@@ -61,13 +61,14 @@ const profileStyles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     marginLeft: 16,
+    fontFamily: 'Figtree_500Medium',
   },
   findFriendsStatus: { color: '#fb7a20', marginTop: 24, textAlign: 'center', fontSize: 16 },
   findFriendsUserCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.06, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 2 },
   findFriendsAvatarCircle: { width: 54, height: 54, borderRadius: 27, backgroundColor: '#f7f7f7', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   findFriendsAvatarImageWrapper: { width: 48, height: 48, borderRadius: 24, overflow: 'hidden' },
   findFriendsAvatarImage: { width: 48, height: 48, borderRadius: 24 },
-  findFriendsUsername: { color: '#fb7a20', fontWeight: 'bold', fontSize: 18 },
+  findFriendsUsername: { color: '#fb7a20', fontWeight: 'bold', fontSize: 18, fontFamily: 'Figtree_700Bold' },
   // Chat/Conversation styles
   modalBackdrop: {
     flex: 1,
@@ -88,9 +89,9 @@ const profileStyles = StyleSheet.create({
     borderBottomColor: '#eee',
     backgroundColor: '#fff',
     minHeight: 56,
+    paddingTop: 50,
     paddingBottom: 8,
     paddingHorizontal: 12,
-    marginTop: 8, // Lower the chat header just below the status bar
   },
   chatBackButton: {
     padding: 0,
@@ -103,6 +104,7 @@ const profileStyles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#222',
     marginLeft: 12,
+    fontFamily: 'Figtree_700Bold',
   },
   chatMessages: {
     flex: 1,
@@ -131,6 +133,7 @@ const profileStyles = StyleSheet.create({
   chatMessageText: {
     fontSize: 15,
     color: '#222',
+    fontFamily: 'Figtree_400Regular',
   },
   chatMessageTime: {
     fontSize: 11,
@@ -196,6 +199,7 @@ const profileStyles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
     marginBottom: 20,
+    fontFamily: 'Figtree_700Bold',
   },
   modalScrollView: {
     paddingHorizontal: 20,
@@ -489,6 +493,75 @@ const profileStyles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 8,
+  },
+  // Edit Profile Styles
+  editProfileModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 12,
+    paddingBottom: 40,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  editProfileContent: {
+    paddingHorizontal: 20,
+  },
+  editProfileSection: {
+    marginBottom: 20,
+  },
+  editProfileLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#222',
+    marginBottom: 8,
+  },
+  editProfileInput: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#222',
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  editProfileNote: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
+  },
+  editProfileButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 20,
+  },
+  editProfileButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#ccc',
+  },
+  cancelButtonText: {
+    color: '#222',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  saveButton: {
+    backgroundColor: '#fb7a20',
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

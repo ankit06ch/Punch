@@ -149,78 +149,120 @@ export default function Discover() {
     return () => { isCancelled = true; };
   }, [searchQuery, searchActive]);
 
+  const renderRestaurantItem = ({ item }: { item: any }) => (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPressIn={handleCardPressIn}
+      onPressOut={handleCardPressOut}
+      style={{ marginBottom: 20 }}
+    >
+      <Animated.View style={[discoverStyles.restaurantCard, { transform: [{ scale: scaleAnim }], marginHorizontal: 0 }]}> 
+        <View style={discoverStyles.restaurantLogoWrap}>
+          {item.logoUrl ? (
+            <Image source={{ uri: item.logoUrl }} style={discoverStyles.restaurantLogo} />
+          ) : (
+            <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={discoverStyles.restaurantLogo} />
+          )}
+        </View>
+        <View style={{ flex: 1, marginRight: 12 }}>
+          <Text style={discoverStyles.cardTitle} numberOfLines={1}>{item.name}</Text>
+          <View style={discoverStyles.badgeRow}>
+            <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.distance}</Text></View>
+            <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.hours}</Text></View>
+            <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.price}</Text></View>
+            {item.cuisine && <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.cuisine}</Text></View>}
+            {item.rating && <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>★ {item.rating}</Text></View>}
+          </View>
+        </View>
+        <TouchableOpacity onPress={() => toggleLike(item.id)} style={styles.heartButton}>
+          <AntDesign name={liked.includes(item.id) ? 'heart' : 'hearto'} size={26} color={liked.includes(item.id) ? '#fb7a20' : '#bbb'} />
+        </TouchableOpacity>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }} onLayout={e => setContainerLayout(e.nativeEvent.layout)}>
       <StatusBar style="dark" backgroundColor="#fff" translucent={true} />
+      
       {/* Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 64, paddingBottom: 6 }}>
-        <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#222', marginTop: 8 }}>Explore</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 64, paddingBottom: 16 }}>
+        <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#222', marginTop: 8 }}>Explore</Text>
         <TouchableOpacity onPress={openSearch}>
-          <Feather name="search" size={26} color="#fb7a20" />
+          <Feather name="search" size={28} color="#fb7a20" />
         </TouchableOpacity>
       </View>
-      {/* Popular Section */}
-      <Text style={{ fontSize: 18, fontWeight: '700', color: '#222', marginLeft: 20, marginBottom: 8 }}>POPULAR <Text style={{ fontSize: 18 }}>👀</Text></Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 20, paddingBottom: 16, paddingTop: 2 }}>
-        {promotions.map((item, idx) => (
-          <View key={idx} style={{ backgroundColor: '#fff', borderRadius: 18, marginRight: 20, elevation: 2, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, padding: 0, alignItems: 'center', justifyContent: 'center', minWidth: 220 }}>
-            <Image source={item.image} style={{ width: 220, height: 90, borderRadius: 18 }} resizeMode="cover" />
-            <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#222', marginTop: 8 }}>{item.business}</Text>
-            <Text style={{ color: '#fb7a20', fontSize: 13, marginBottom: 8 }}>{item.promo}</Text>
-          </View>
-        ))}
-      </ScrollView>
-      {/* Categories */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 20, paddingBottom: 8 }}>
-        {CATEGORIES.map(cat => (
-          <TouchableOpacity
-            key={cat}
-            onPress={() => setActiveCategory(cat)}
-            style={{ marginRight: 18 }}
-          >
-            <Text style={{ fontSize: 16, fontWeight: activeCategory === cat ? 'bold' : '600', color: activeCategory === cat ? '#222' : '#aaa', letterSpacing: 1, borderBottomWidth: activeCategory === cat ? 2 : 0, borderColor: '#222', paddingBottom: 2 }}>{cat}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-      {/* Restaurant Cards */}
-      <FlatList
-        data={filteredRestaurants}
-        keyExtractor={item => item.id}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 60, backgroundColor: '#fff', paddingTop: 8 }}
-        refreshing={loading}
-        onRefresh={fetchRestaurants}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPressIn={handleCardPressIn}
-            onPressOut={handleCardPressOut}
-            style={{ marginBottom: 16 }}
-          >
-            <Animated.View style={[discoverStyles.restaurantCard, { transform: [{ scale: scaleAnim }], marginHorizontal: 0 }]}> 
-              <View style={discoverStyles.restaurantLogoWrap}>
-                {item.logoUrl ? (
-                  <Image source={{ uri: item.logoUrl }} style={discoverStyles.restaurantLogo} />
-                ) : (
-                  <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={discoverStyles.restaurantLogo} />
-                )}
+      
+      {/* Main Scrollable Content */}
+      <ScrollView 
+        style={{ flex: 1 }} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
+        {/* Popular Section */}
+        <Text style={{ fontSize: 20, fontWeight: '700', color: '#222', marginLeft: 24, marginBottom: 16, marginTop: 8 }}>POPULAR <Text style={{ fontSize: 20 }}>👀</Text></Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 24, paddingBottom: 24, paddingTop: 4 }}>
+          {promotions.map((item, idx) => (
+            <View key={idx} style={{ backgroundColor: '#fff', borderRadius: 20, marginRight: 24, elevation: 3, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, padding: 0, alignItems: 'center', justifyContent: 'center', minWidth: 240, height: 160 }}>
+              <Image source={item.image} style={{ width: 240, height: 100, borderRadius: 20 }} resizeMode="cover" />
+              <View style={{ padding: 16, alignItems: 'center', flex: 1, justifyContent: 'center' }}>
+                <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#222', marginBottom: 4, textAlign: 'center' }} numberOfLines={1}>{item.business}</Text>
+                <Text style={{ color: '#fb7a20', fontSize: 14, textAlign: 'center' }} numberOfLines={1}>{item.promo}</Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={discoverStyles.cardTitle}>{item.name}</Text>
-                <View style={discoverStyles.badgeRow}>
-                  <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.distance}</Text></View>
-                  <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.hours}</Text></View>
-                  <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.price}</Text></View>
-                  {item.cuisine && <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.cuisine}</Text></View>}
-                  {item.rating && <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>★ {item.rating}</Text></View>}
+            </View>
+          ))}
+        </ScrollView>
+        
+        {/* Categories */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 24, paddingBottom: 20, paddingTop: 8 }}>
+          {CATEGORIES.map(cat => (
+            <TouchableOpacity
+              key={cat}
+              onPress={() => setActiveCategory(cat)}
+              style={{ marginRight: 24 }}
+            >
+              <Text style={{ fontSize: 17, fontWeight: activeCategory === cat ? 'bold' : '600', color: activeCategory === cat ? '#222' : '#aaa', letterSpacing: 1, borderBottomWidth: activeCategory === cat ? 2 : 0, borderColor: '#222', paddingBottom: 4 }}>{cat}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        
+        {/* Restaurant Cards */}
+        <View style={{ paddingHorizontal: 24, paddingTop: 12 }}>
+          {filteredRestaurants.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.85}
+              onPressIn={handleCardPressIn}
+              onPressOut={handleCardPressOut}
+              style={{ marginBottom: 20 }}
+            >
+              <Animated.View style={[discoverStyles.restaurantCard, { transform: [{ scale: scaleAnim }], marginHorizontal: 0 }]}> 
+                <View style={discoverStyles.restaurantLogoWrap}>
+                  {item.logoUrl ? (
+                    <Image source={{ uri: item.logoUrl }} style={discoverStyles.restaurantLogo} />
+                  ) : (
+                    <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={discoverStyles.restaurantLogo} />
+                  )}
                 </View>
-              </View>
-              <TouchableOpacity onPress={() => toggleLike(item.id)} style={styles.heartButton}>
-                <AntDesign name={liked.includes(item.id) ? 'heart' : 'hearto'} size={24} color={liked.includes(item.id) ? '#fb7a20' : '#bbb'} />
-              </TouchableOpacity>
-            </Animated.View>
-          </TouchableOpacity>
-        )}
-      />
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={discoverStyles.cardTitle} numberOfLines={1}>{item.name}</Text>
+                  <View style={discoverStyles.badgeRow}>
+                    <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.distance}</Text></View>
+                    <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.hours}</Text></View>
+                    <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.price}</Text></View>
+                    {item.cuisine && <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.cuisine}</Text></View>}
+                    {item.rating && <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>★ {item.rating}</Text></View>}
+                  </View>
+                </View>
+                <TouchableOpacity onPress={() => toggleLike(item.id)} style={styles.heartButton}>
+                  <AntDesign name={liked.includes(item.id) ? 'heart' : 'hearto'} size={26} color={liked.includes(item.id) ? '#fb7a20' : '#bbb'} />
+                </TouchableOpacity>
+              </Animated.View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+      
       {/* Orange Search Overlay with Spilling Animation */}
       {searchActive && (
         <>
@@ -256,12 +298,12 @@ export default function Discover() {
             }}
             // pointerEvents logic removed for linter safety
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: 64, paddingHorizontal: 20, marginBottom: 16 }}>
-              <TouchableOpacity onPress={closeSearch} style={{ marginRight: 16 }}>
-                <AntDesign name="arrowleft" size={28} color="#fff" />
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: 64, paddingHorizontal: 24, marginBottom: 20 }}>
+              <TouchableOpacity onPress={closeSearch} style={{ marginRight: 20 }}>
+                <AntDesign name="arrowleft" size={30} color="#fff" />
               </TouchableOpacity>
               <TextInput
-                style={{ flex: 1, backgroundColor: 'white', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#222' }}
+                style={{ flex: 1, backgroundColor: 'white', borderRadius: 16, paddingHorizontal: 20, paddingVertical: 16, fontSize: 17, color: '#222' }}
                 placeholder="Search restaurants..."
                 placeholderTextColor="#fb7a20"
                 value={searchQuery}
@@ -270,21 +312,21 @@ export default function Discover() {
               />
             </View>
             {/* Search results */}
-            <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12 }}>
+            <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
               {searchQuery.trim() ? (
                 searchResults.length > 0 ? (
                   searchResults.map((r: any) => (
-                    <TouchableOpacity key={r.id} style={{ paddingVertical: 16, borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }}>
-                      <Text style={{ color: '#fff', fontSize: 20 }}>{r.name}</Text>
+                    <TouchableOpacity key={r.id} style={{ paddingVertical: 20, borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }}>
+                      <Text style={{ color: '#fff', fontSize: 22 }}>{r.name}</Text>
                     </TouchableOpacity>
                   ))
                 ) : (
-                  <Text style={{ color: '#fff', fontSize: 18, textAlign: 'center', marginTop: 40 }}>
+                  <Text style={{ color: '#fff', fontSize: 20, textAlign: 'center', marginTop: 60 }}>
                     No restaurants found.
                   </Text>
                 )
               ) : (
-                <Text style={{ color: '#fff', fontSize: 18, textAlign: 'center', marginTop: 40 }}>
+                <Text style={{ color: '#fff', fontSize: 20, textAlign: 'center', marginTop: 60 }}>
                   Start typing to search for restaurants...
                 </Text>
               )}
@@ -308,8 +350,8 @@ const styles = StyleSheet.create({
     color: '#222',
   },
   heartButton: {
-    marginLeft: 12,
+    marginLeft: 16,
     alignSelf: 'flex-start',
-    padding: 4,
+    padding: 6,
   },
 });
