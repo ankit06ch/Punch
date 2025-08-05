@@ -99,8 +99,8 @@ const steps = [
     key: 'contact',
     prompt: "How can we reach you?",
     icon: 'mail',
-    validate: (form: any) => {
-      if (!form.email || !/.+@.+\..+/.test(form.email)) return 'Please enter a valid email.';
+    validate: (val: string, form?: { name: string; email: string; phone: string; password: string }) => {
+      if (!form?.email || !/.+@.+\..+/.test(form.email)) return 'Please enter a valid email.';
       // phone is optional
       return true;
     },
@@ -139,7 +139,7 @@ function getFriendlyErrorMessage(errorCode: string) {
 
 export default function SignupScreen() {
   const router = useRouter();
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState<number>(0);
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
   const [mode, setMode] = useState<'email' | 'phone'>('email');
   const [error, setError] = useState('');
@@ -229,7 +229,7 @@ export default function SignupScreen() {
     const value = form[current.key as keyof typeof form];
     if (current.key === 'contact') {
       if (typeof current.validate === 'function') {
-        const valid = current.validate(form);
+        const valid = current.validate('', form);
         if (valid !== true) {
           setError(typeof valid === 'string' ? valid : 'Please fill this in.');
           return;
@@ -241,7 +241,7 @@ export default function SignupScreen() {
       return;
     }
     if (typeof current.validate === 'function') {
-      const valid = current.validate(value);
+      const valid = current.validate(value as string);
       if (valid !== true) {
         setError(typeof valid === 'string' ? valid : 'Please fill this in.');
         return;
@@ -405,7 +405,7 @@ export default function SignupScreen() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 8 }}>
                       <CustomCheckbox value={agree} onValueChange={setAgree} />
                       <CustomText style={{ marginLeft: 8, color: '#222' }}>
-                        I agree to <CustomText style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://your-terms-url.com')}>Terms of Service</CustomText> & <CustomText style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://your-privacy-url.com')}>Privacy Policy</CustomText>
+                        I agree to <CustomText style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://your-terms-url.com')}>Terms of Service</CustomText>{' '}<CustomText style={{ color: '#222' }}>&</CustomText>{' '}<CustomText style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://your-privacy-url.com')}>Privacy Policy</CustomText>
                       </CustomText>
                     </View>
                     {/* Back and Create Account buttons in the same row */}
@@ -479,11 +479,11 @@ export default function SignupScreen() {
                   <View style={{ width: '100%', marginTop: 12, marginBottom: 8 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                       <Switch value={notifEmail} onValueChange={setNotifEmail} thumbColor={notifEmail ? '#FB7A20' : '#ccc'} trackColor={{ true: '#fcd7b0', false: '#eee' }} />
-                      <CustomText style={{ marginLeft: 8, color: '#222' }}>Email me updates & rewards</CustomText>
+                      <CustomText style={{ marginLeft: 8, color: '#222' }}>Email me updates{' '}<CustomText style={{ color: '#222' }}>&</CustomText>{' '}rewards</CustomText>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <Switch value={notifText} onValueChange={setNotifText} thumbColor={notifText ? '#FB7A20' : '#ccc'} trackColor={{ true: '#fcd7b0', false: '#eee' }} />
-                      <CustomText style={{ marginLeft: 8, color: '#222' }}>Text me updates & rewards</CustomText>
+                      <CustomText style={{ marginLeft: 8, color: '#222' }}>Text me updates{' '}<CustomText style={{ color: '#222' }}>&</CustomText>{' '}rewards</CustomText>
                     </View>
                   </View>
                 )}

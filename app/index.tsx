@@ -13,9 +13,9 @@ export default function Index() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       console.log("AUTH STATE CHANGED:", user);
       if (user) {
-        router.replace('../authenticated_tabs/home');
+        router.replace('/authenticated_tabs/home');
       } else {
-        router.replace('../unauthenticated_tabs/splash');
+        router.replace('/unauthenticated_tabs/splash');
       }
       setLoading(false);
     });

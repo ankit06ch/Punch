@@ -1,183 +1,445 @@
 import { StyleSheet, Dimensions } from 'react-native';
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = width * 0.8;
-const CARD_HEIGHT = 180; // Assuming a default height for cards
 
-const styles = StyleSheet.create({
+const { width } = Dimensions.get('window');
+export const CARD_WIDTH = width * 0.85;
+export const CARD_HEIGHT = 200; // Increased from 180 to fit all content
+export const CARD_SPACING = 16;
+
+// Sophisticated color palette
+const COLORS = {
+  primary: '#2C3E50',      // Dark blue-gray
+  secondary: '#34495E',    // Medium blue-gray
+  accent: '#E74C3C',       // Red accent
+  success: '#27AE60',      // Green
+  warning: '#F39C12',      // Orange
+  info: '#3498DB',         // Blue
+  light: '#ECF0F1',        // Light gray
+  white: '#FFFFFF',
+  text: {
+    primary: '#2C3E50',
+    secondary: '#7F8C8D',
+    light: '#BDC3C7',
+    white: '#FFFFFF',
+  },
+  background: {
+    primary: '#F8F9FA',
+    secondary: '#FFFFFF',
+    glass: 'rgba(255,255,255,0.85)',
+  },
+  card: {
+    primary: '#2C3E50',
+    secondary: '#34495E',
+    accent: '#E74C3C',
+    success: '#27AE60',
+    warning: '#F39C12',
+    info: '#3498DB',
+  }
+};
+
+export default StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff', // white background
+    backgroundColor: COLORS.background.primary,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingTop: 20,
+    paddingBottom: 40,
+  },
+  header: {
+    marginBottom: 24,
     paddingHorizontal: 20,
-    paddingTop: 40,
-    paddingBottom: 0,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#fb7a20', // white title
-    marginBottom: 20,
-    alignSelf: 'flex-start',
+    color: COLORS.primary,
+    marginBottom: 8,
   },
-  cardContainer: {
-    width: CARD_WIDTH,
-    height: 180,
-    backgroundColor: '#fff', // keep cards white for contrast
-    borderRadius: 24,
-    padding: 24,
-    marginRight: 0,
-    marginLeft: 0,
-    marginBottom: 0,
-    shadowColor: '#fb7a20',
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
+  subtitle: {
+    color: COLORS.text.secondary,
+  },
+  glassCard: {
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    backgroundColor: COLORS.background.glass,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
-    borderWidth: 1.5,
-    borderColor: '#fff0e0', // lighter orange border
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  searchContainer: {
+    marginBottom: 16,
+    padding: 16,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background.secondary,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: COLORS.light,
+  },
+  searchIcon: {
+    marginRight: 12,
+    color: COLORS.primary,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.text.primary,
+  },
+  clearButton: {
+    padding: 4,
+  },
+  filterContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+  },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: COLORS.background.secondary,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: COLORS.light,
+  },
+  filterChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  filterChipText: {
+    color: COLORS.text.secondary,
+  },
+  filterChipTextActive: {
+    color: COLORS.text.white,
+  },
+  sectionCard: {
+    marginBottom: 20,
+    marginHorizontal: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    color: COLORS.primary,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  viewAllText: {
+    color: COLORS.primary,
+  },
+  searchIconButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(44, 62, 80, 0.1)',
+  },
+  animatedSearchContainer: {
+    marginBottom: 16,
     overflow: 'hidden',
   },
-  cardAccent: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: 36,
-    backgroundColor: '#fb7a20',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    zIndex: 1,
-  },
-  businessName: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 15,
-    color: '#fb7a20', // orange business name
-    marginTop: 44,
-    zIndex: 2,
-  },
-  punchRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-start',
-    gap: 10,
-    marginBottom: 15,
-  },
-  punch: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: '#fb7a20',
-    marginRight: 8,
-    marginBottom: 8,
-    backgroundColor: '#fff',
-    shadowColor: '#fb7a20',
-    shadowOpacity: 0,
-  },
-  filledPunch: {
-    backgroundColor: '#fb7a20',
-    shadowOpacity: 0.4,
-  },
-  emptyPunch: {
-    backgroundColor: '#fff',
-  },
-  nextPunch: {
-    borderColor: '#fff0e0',
-    borderWidth: 3,
-  },
-  cardSubtitle: {
-    fontSize: 16,
-    color: '#fb7a20', // orange subtitle
-    fontWeight: '600',
-  },
-  cardStackArea: {
-    height: width * 0.7 + 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    marginBottom: 8,
+  searchCard: {
+    padding: 16,
   },
   loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    minHeight: 120,
+    paddingVertical: 40,
   },
-  cardStackContainer: {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT + 24 * 3,
-    position: 'relative',
-    alignSelf: 'center',
-  },
-  moreCardsContainer: {
-    position: 'absolute',
-    bottom: -36,
-    left: 0,
-    right: 0,
-    width: CARD_WIDTH * 0.7,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#fff0e0', // lighter orange
-    justifyContent: 'center',
+  emptyState: {
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#fb7a20',
-    alignSelf: 'center',
+    paddingVertical: 40,
   },
-  moreCardsText: {
-    color: '#fb7a20', // orange text
-    fontWeight: '600',
-    fontSize: 16,
+  emptyIcon: {
+    marginBottom: 16,
+    opacity: 0.6,
+    color: COLORS.primary,
   },
-  transactionHistoryContainer: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    marginTop: 8,
-    position: 'relative',
-    overflow: 'visible',
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 32,
-    shadowOffset: { width: 0, height: -12 },
-    elevation: 20,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  transactionHistoryContent: {
-    padding: 20,
-  },
-  transactionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fb7a20', // white title
+  emptyText: {
+    color: COLORS.text.secondary,
     marginBottom: 8,
   },
-  transactionEmpty: {
-    color: '#fff',
-    fontSize: 16,
+  emptySubtext: {
+    color: COLORS.text.light,
+    textAlign: 'center',
   },
-  addPassContainer: {
-    marginTop: 30,
+  cardsList: {
+    paddingVertical: 8,
+    paddingLeft: (width - CARD_WIDTH) / 2 - 30 + 20, // Show left card + extra padding for first card
+    paddingRight: (width - CARD_WIDTH) / 2 - 30 + CARD_SPACING + 20, // Show more of right card
+  },
+  cardWrapper: {
+    marginRight: CARD_SPACING, // Use consistent spacing
+  },
+  creditCard: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    borderRadius: 16,
+    padding: 20,
+    position: 'relative',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  cardLogoSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  cardLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  cardBusinessName: {
+    color: COLORS.text.white,
+    fontSize: 20,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  cardChip: {
+    width: 48,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  addPassText: {
-    color: '#fff',
-    fontSize: 16,
-    marginTop: 24,
+  chipLines: {
+    width: 32,
+    height: 20,
+    justifyContent: 'space-between',
   },
-  transactionHistoryBackground: {
+  chipLine: {
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderRadius: 1,
+  },
+  cardContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  cardInfo: {
+    gap: 8,
+    marginBottom: 0,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cardLocation: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+  },
+  cardLastUsed: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  punchProgress: {
+    alignItems: 'flex-start',
+  },
+  punchCount: {
+    color: COLORS.text.white,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  punchLabel: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+  },
+  rewardProgress: {
+    alignItems: 'flex-end',
+    flex: 1,
+    marginLeft: 16,
+  },
+  rewardProgressInline: {
+    marginTop: 8,
+    gap: 4,
+  },
+  rewardText: {
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: 0,
+    marginTop: 0,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  progressBar: {
+    width: 80,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: COLORS.text.white,
+    borderRadius: 2,
+  },
+  cardNumber: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    bottom: 20,
+    right: 20,
+  },
+  cardNumberText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    fontFamily: 'monospace',
+  },
+  cardMenuButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  transactionsList: {
+    gap: 12,
+  },
+  transactionCard: {
+    padding: 16,
+  },
+  transactionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  transactionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  transactionInfo: {
+    flex: 1,
+  },
+  transactionBusiness: {
+    color: COLORS.text.primary,
+    marginBottom: 4,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  transactionType: {
+    color: COLORS.text.secondary,
+    marginBottom: 2,
+    fontSize: 14,
+  },
+  transactionDate: {
+    color: COLORS.text.light,
+    fontSize: 12,
+  },
+  transactionAmount: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  menuModal: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  menuContent: {
+    backgroundColor: COLORS.background.secondary,
+    borderRadius: 16,
+    padding: 20,
+    width: '80%',
+    maxWidth: 300,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 16,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  menuItemText: {
+    marginLeft: 12,
+    fontSize: 16,
+    color: COLORS.text.primary,
+    fontWeight: '500',
+  },
+  menuTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text.primary,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  // New styles for punch card section without white box
+  punchCardSection: {
+    marginBottom: 20,
+  },
+  punchCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    position: 'relative',
+    paddingHorizontal: 20,
+  },
+  punchCardTitle: {
+    color: COLORS.primary,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  animatedSearchOverlay: {
+    position: 'absolute',
     top: 0,
-    bottom: 0,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    zIndex: 0,
-    width: '100%',
-    alignSelf: 'center',
-    backgroundColor: '#fb7a20', // orange background for history
+    right: 20, // Add right padding
+    left: 20, // Add left padding
+    backgroundColor: COLORS.background.primary,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  overlaySearchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.text.primary,
+    marginLeft: 12,
   },
 });
-
-export default styles;

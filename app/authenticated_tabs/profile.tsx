@@ -1,22 +1,46 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, ScrollView, FlatList, Share, Animated, TextInput, Dimensions, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, ScrollView, FlatList, Share, Animated, TextInput, Dimensions, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons, Feather, AntDesign } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, query, where, orderBy, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import profileStyles from '../styles/profileStyles';
 import { PanResponder } from 'react-native';
+import {
+  useFonts,
+  Figtree_300Light,
+  Figtree_400Regular,
+  Figtree_500Medium,
+  Figtree_600SemiBold,
+  Figtree_700Bold,
+  Figtree_800ExtraBold,
+  Figtree_900Black,
+} from '@expo-google-fonts/figtree';
 
 const ORANGE = '#fb7a20';
 
 export default function Profile() {
+  // Load Figtree fonts
+  const [fontsLoaded] = useFonts({
+    Figtree_300Light,
+    Figtree_400Regular,
+    Figtree_500Medium,
+    Figtree_600SemiBold,
+    Figtree_700Bold,
+    Figtree_800ExtraBold,
+    Figtree_900Black,
+  });
+
+  const { showMessages: showMessagesParam } = useLocalSearchParams();
+  
   // All hooks at the top (already correct in your file)
   const [modalVisible, setModalVisible] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
   const [showPrivacySettings, setShowPrivacySettings] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
   const [userData, setUserData] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [searchActive, setSearchActive] = useState(false);
@@ -38,9 +62,7 @@ export default function Profile() {
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
   const [containerLayout, setContainerLayout] = useState({ width: screenWidth, height: screenHeight });
-  const [selectedConversation, setSelectedConversation] = useState<any>(null);
-  const [chatInput, setChatInput] = useState('');
-  const [sending, setSending] = useState(false);
+
   const [panY] = useState(new Animated.Value(0));
   const panResponder = useRef(
     PanResponder.create({
@@ -48,7 +70,6 @@ export default function Profile() {
       onPanResponderMove: Animated.event([null, { dy: panY }], { useNativeDriver: false }),
       onPanResponderRelease: (_, gestureState) => {
         if (gestureState.dy > 100) {
-          setSelectedConversation(null);
           panY.setValue(0);
         } else {
           Animated.spring(panY, { toValue: 0, useNativeDriver: false }).start();
@@ -59,10 +80,104 @@ export default function Profile() {
   const [selectedProfileTab, setSelectedProfileTab] = useState<'liked' | 'rewards'>('liked');
   // Add scale animation for profile zoom-out
   const profileScale = useRef(new Animated.Value(1)).current;
+  
+  // Drag-to-dismiss animations
+  const menuModalTranslateY = useRef(new Animated.Value(0)).current;
+  const messagesModalTranslateY = useRef(new Animated.Value(0)).current;
+  
+  // Edit Profile state
+  const [editProfileData, setEditProfileData] = useState({
+    name: '',
+    bio: '',
+    email: '',
+    phone: ''
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
 
-  // Animate scale when modalVisible changes
+  // PanResponder for hamburger menu modal
+  const menuModalPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 5,
+      onPanResponderGrant: () => {
+        menuModalTranslateY.setOffset(0);
+        menuModalTranslateY.setValue(0);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          menuModalTranslateY.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        menuModalTranslateY.flattenOffset();
+        if (gestureState.dy > 100) {
+          // Dismiss modal
+          Animated.timing(menuModalTranslateY, {
+            toValue: 1000,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            setModalVisible(false);
+            menuModalTranslateY.setValue(0);
+          });
+        } else {
+          // Snap back
+          Animated.spring(menuModalTranslateY, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  // PanResponder for messages modal
+  const messagesModalPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 5,
+      onPanResponderGrant: () => {
+        messagesModalTranslateY.setOffset(0);
+        messagesModalTranslateY.setValue(0);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          messagesModalTranslateY.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        messagesModalTranslateY.flattenOffset();
+        if (gestureState.dy > 100) {
+          // Dismiss modal
+          Animated.timing(messagesModalTranslateY, {
+            toValue: 1000,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            setShowMessages(false);
+            messagesModalTranslateY.setValue(0);
+          });
+        } else {
+          // Snap back
+          Animated.spring(messagesModalTranslateY, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  // Handle showMessages parameter from navigation
   useEffect(() => {
-    if (modalVisible) {
+    if (showMessagesParam === 'true') {
+      setShowMessages(true);
+    }
+  }, [showMessagesParam]);
+
+  // Animate scale when modalVisible or showMessages changes
+  useEffect(() => {
+    if (modalVisible || showMessages) {
       Animated.timing(profileScale, {
         toValue: 0.93,
         duration: 250,
@@ -75,7 +190,7 @@ export default function Profile() {
         useNativeDriver: true,
       }).start();
     }
-  }, [modalVisible]);
+  }, [modalVisible, showMessages]);
 
   const router = useRouter();
 
@@ -379,14 +494,53 @@ export default function Profile() {
   }, [searchQuery, searchActive]);
 
   const navigateToUserProfile = (userId: string) => {
-    closeSearch();
     router.push(`/screens/user-profile?userId=${userId}`);
   };
 
-  // Modal swipe-to-close logic
   const onGestureEvent = (event: any) => {
-    if (event.nativeEvent.translationY > 100) {
-      setModalVisible(false);
+    // Handle gesture events if needed
+  };
+
+  // Edit Profile Functions
+  const openEditProfile = () => {
+    setEditProfileData({
+      name: userData.name || '',
+      bio: userData.bio || '',
+      email: userData.email || '',
+      phone: userData.phone || ''
+    });
+    setShowEditProfile(true);
+    setModalVisible(false);
+  };
+
+  const saveProfileChanges = async () => {
+    setSavingProfile(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        name: editProfileData.name,
+        bio: editProfileData.bio,
+        phone: editProfileData.phone
+      });
+
+      // Update local state
+      setUserData((prev: any) => ({
+        ...prev,
+        name: editProfileData.name,
+        bio: editProfileData.bio,
+        phone: editProfileData.phone
+      }));
+
+      setShowEditProfile(false);
+      Alert.alert('Success', 'Profile updated successfully!');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -429,7 +583,7 @@ export default function Profile() {
   const renderConversation = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={profileStyles.conversationPreview}
-      onPress={() => setSelectedConversation(item)}
+      onPress={() => openChat(item)}
       activeOpacity={0.85}
     >
       <View style={profileStyles.conversationAvatar}>
@@ -458,123 +612,13 @@ export default function Profile() {
     </TouchableOpacity>
   );
 
-  // Send message handler
-  const sendMessage = async () => {
-    if (!chatInput.trim() || !selectedConversation) return;
-    setSending(true);
-    const user = auth.currentUser;
-    if (!user) return;
-    try {
-      if (selectedConversation.id === 'puncho_bot') {
-        // Send as notification to self from Puncho
-        await addDoc(collection(db, 'notifications'), {
-          type: 'puncho_reply',
-          fromUserId: user.uid,
-          toUserId: user.uid,
-          timestamp: new Date(),
-          read: false,
-          message: chatInput,
-          senderName: userData.username || user.displayName || 'You',
-          senderAvatar: null
-        });
-      } else {
-        // Send to friend (store in messages collection)
-        const chatId = [user.uid, selectedConversation.id].sort().join('_');
-        await addDoc(collection(db, 'messages'), {
-          chatId,
-          fromUserId: user.uid,
-          toUserId: selectedConversation.id,
-          timestamp: new Date(),
-          message: chatInput,
-        });
-      }
-      setChatInput('');
-    } catch (error) {
-      console.error('Error sending message:', error);
-    } finally {
-      setSending(false);
-    }
-  };
 
-  // Render full chat view
-  const renderChatView = () => (
-    <Modal
-      animationType="slide"
-      transparent={true}
-      visible={!!selectedConversation}
-      onRequestClose={() => {
-        setSelectedConversation(null);
-        setShowMessages(true); // Show conversation list again
-      }}
-    >
-      <View style={[profileStyles.modalBackdrop, { backgroundColor: 'rgba(0,0,0,0.25)' }]}> 
-        <Animated.View
-          style={[
-            profileStyles.fullChatModal,
-            { flex: 1, transform: [{ translateY: panY }] },
-          ]}
-          {...panResponder.panHandlers}
-        >
-          <SafeAreaView style={profileStyles.chatHeader} edges={['top']}>
-            <TouchableOpacity onPress={() => {
-              setSelectedConversation(null);
-              setShowMessages(true);
-            }} style={profileStyles.chatBackButton}>
-              <Ionicons name="arrow-back" size={26} color={ORANGE} />
-            </TouchableOpacity>
-            <Text style={profileStyles.chatTitle}>{selectedConversation?.name || '@' + selectedConversation?.username}</Text>
-          </SafeAreaView>
-          <KeyboardAvoidingView
-            style={{ flex: 1 }}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-          >
-            <ScrollView
-              style={profileStyles.chatMessages}
-              contentContainerStyle={{ padding: 20, flexGrow: 1, justifyContent: 'flex-end' }}
-              ref={ref => { if (ref) ref.scrollToEnd({ animated: true }); }}
-            >
-              {[...(selectedConversation?.messages || [])].reverse().map((msg: any, idx: number) => {
-                const isOutgoing = msg.fromUserId === auth.currentUser?.uid;
-                const isPuncho = msg.fromUserId === 'puncho_bot';
-                return (
-                  <View
-                    key={msg.id || idx}
-                    style={[
-                      profileStyles.chatMessageBubble,
-                      isOutgoing ? profileStyles.outgoingMessage : null,
-                      isPuncho ? profileStyles.punchoMessage : null,
-                    ]}
-                  >
-                    <Text style={[profileStyles.chatMessageText, isOutgoing || isPuncho ? { color: '#fff' } : null]}>{msg.message}</Text>
-                    <Text style={[profileStyles.chatMessageTime, isOutgoing || isPuncho ? { color: 'rgba(255,255,255,0.7)' } : null]}>{new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-                  </View>
-                );
-              }) || <Text style={{ color: '#888', marginTop: 40 }}>No messages yet.</Text>}
-            </ScrollView>
-            <View style={profileStyles.chatInputBar}>
-              <TextInput
-                style={profileStyles.chatInput}
-                placeholder="Type a message..."
-                value={chatInput}
-                onChangeText={setChatInput}
-                editable={!sending}
-                onSubmitEditing={sendMessage}
-                returnKeyType="send"
-              />
-              <TouchableOpacity
-                style={profileStyles.sendButton}
-                onPress={sendMessage}
-                disabled={sending || !chatInput.trim()}
-              >
-                <Ionicons name="send" size={22} color={chatInput.trim() ? ORANGE : '#ccc'} />
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
-        </Animated.View>
-      </View>
-    </Modal>
-  );
+
+  // Navigate to chat screen
+  const openChat = (conversation: any) => {
+    setShowMessages(false);
+    router.push(`/screens/chat?conversationId=${conversation.id}&name=${encodeURIComponent(conversation.name || conversation.username)}`);
+  };
 
   // Move the loading check AFTER all hooks
   if (loading) {
@@ -633,6 +677,17 @@ export default function Profile() {
     );
   };
 
+  // Don't render until fonts are loaded
+  if (!fontsLoaded) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container} onLayout={e => setContainerLayout(e.nativeEvent.layout)}>
       {/* Top bar */}
@@ -670,6 +725,7 @@ export default function Profile() {
         {/* Username at the top */}
         <Text style={styles.username}>@{userData.username || 'username'}</Text>
         <Text style={styles.name}>{userData.name || 'Your Name'}</Text>
+        
         {/* Followers, Following, Stores Visited in order, all clickable */}
         <View style={styles.statsContainer}>
           <TouchableOpacity style={styles.statItem} onPress={() => router.push(`/screens/followers?userId=${userData.id || auth.currentUser?.uid}`)}>
@@ -685,12 +741,9 @@ export default function Profile() {
             <Text style={styles.statLabel}>Stores Visited</Text>
           </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.editButton}>
-          <Text style={styles.editButtonText}>Edit Profile</Text>
-        </TouchableOpacity>
 
-        {/* Toggle for Liked Restaurants and Rewards History */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 20, marginBottom: 8 }}>
+        {/* Toggle for Liked Restaurants and Rewards History - Moved higher up */}
+        <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 8, marginBottom: 8 }}>
           <TouchableOpacity
             style={{
               flexDirection: 'row',
@@ -726,7 +779,7 @@ export default function Profile() {
             <Text style={{ color: selectedProfileTab === 'rewards' ? '#fff' : ORANGE, fontWeight: 'bold' }}>Rewards</Text>
           </TouchableOpacity>
         </View>
-
+        
         {/* Liked Restaurants Section */}
         {selectedProfileTab === 'liked' && (
           <View style={{ width: '100%', marginTop: 8 }}>
@@ -861,15 +914,24 @@ export default function Profile() {
           activeOpacity={1}
           onPress={() => setModalVisible(false)}
         >
-          <View style={[profileStyles.settingsModalContent, { position: 'absolute', left: 0, right: 0, bottom: 0 }]}> 
+          <Animated.View
+            style={[
+              profileStyles.settingsModalContent,
+              { position: 'absolute', left: 0, right: 0, bottom: 0, transform: [{ translateY: menuModalTranslateY }] },
+            ]}
+            {...menuModalPanResponder.panHandlers}
+          >
             <View style={profileStyles.modalHandle} />
             <Text style={profileStyles.modalTitle}>{showPrivacySettings ? 'Privacy Settings' : 'Settings'}</Text>
             <ScrollView style={profileStyles.modalScrollView}>
               {!showPrivacySettings ? (
                 <>
-                  <TouchableOpacity style={profileStyles.modalItem}>
-                    <Ionicons name="person-outline" size={24} color="#fff" />
-                    <Text style={profileStyles.modalItemText}>Account</Text>
+                  <TouchableOpacity 
+                    style={profileStyles.modalItem}
+                    onPress={openEditProfile}
+                  >
+                    <Ionicons name="create-outline" size={24} color="#fff" />
+                    <Text style={profileStyles.modalItemText}>Edit Profile</Text>
                   </TouchableOpacity>
                   
                   <TouchableOpacity 
@@ -908,14 +970,21 @@ export default function Profile() {
                     <Text style={profileStyles.modalItemText}>About</Text>
                   </TouchableOpacity>
                   
-                  <TouchableOpacity style={profileStyles.modalItem} onPress={async () => {
-                    try {
-                      await auth.signOut();
-                      setModalVisible(false);
-                      router.replace('/unauthenticated_tabs/login');
-                    } catch (e) {
-                      alert('Error signing out.');
-                    }
+                  <TouchableOpacity style={profileStyles.modalItem} onPress={() => {
+                    console.log('Signing out...');
+                    setModalVisible(false);
+                    
+                    // Sign out and handle navigation
+                    auth.signOut()
+                      .then(() => {
+                        console.log('Sign out successful');
+                        // Force navigation to splash screen
+                        router.replace('/unauthenticated_tabs/splash');
+                      })
+                      .catch((e) => {
+                        console.error('Sign out error:', e);
+                        alert('Error signing out.');
+                      });
                   }}>
                     <Ionicons name="log-out-outline" size={24} color="#fff" />
                     <Text style={profileStyles.modalItemText}>Sign Out</Text>
@@ -1011,15 +1080,15 @@ export default function Profile() {
                 </>
               )}
             </ScrollView>
-          </View>
+          </Animated.View>
         </TouchableOpacity>
       </Modal>
 
-      {/* Messages Modal: Only show conversation list if showMessages is true and selectedConversation is null */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={showMessages && !selectedConversation}
+              {/* Messages Modal */}
+        <Modal
+          animationType="fade"
+          transparent={true}
+          visible={showMessages}
         onRequestClose={() => setShowMessages(false)}
       >
         <TouchableOpacity 
@@ -1027,10 +1096,12 @@ export default function Profile() {
           activeOpacity={1}
           onPress={() => setShowMessages(false)}
         >
-          <TouchableOpacity 
-            style={profileStyles.messagesModalContent}
-            activeOpacity={1}
-            onPress={() => {}}
+          <Animated.View
+            style={[
+              profileStyles.messagesModalContent,
+              { transform: [{ translateY: messagesModalTranslateY }] },
+            ]}
+            {...messagesModalPanResponder.panHandlers}
           >
             <View style={profileStyles.modalHandle} />
             <Text style={[profileStyles.modalTitle, { color: '#fb7a20' }]}>Messages</Text>
@@ -1048,12 +1119,11 @@ export default function Profile() {
                 ListEmptyComponent={<Text style={{ color: '#888', textAlign: 'center', marginTop: 40 }}>No conversations yet. Messages from Puncho and friends will appear here.</Text>}
               />
             </View>
-          </TouchableOpacity>
+          </Animated.View>
         </TouchableOpacity>
       </Modal>
 
-      {/* Chat Modal: Only show when selectedConversation is not null */}
-      {selectedConversation && renderChatView()}
+      
 
       {/* About Modal */}
       <Modal
@@ -1130,6 +1200,93 @@ export default function Profile() {
                 support@punchapp.com{'\n'}
                 We'll get back to you within 24 hours.
               </Text>
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showEditProfile}
+        onRequestClose={() => setShowEditProfile(false)}
+      >
+        <TouchableOpacity 
+          style={profileStyles.modalBackdrop} 
+          activeOpacity={1}
+          onPress={() => setShowEditProfile(false)}
+        >
+          <View style={profileStyles.editProfileModalContent}>
+            <View style={profileStyles.modalHandle} />
+            <Text style={profileStyles.modalTitle}>Edit Profile</Text>
+            <ScrollView style={profileStyles.editProfileContent}>
+              <View style={profileStyles.editProfileSection}>
+                <Text style={profileStyles.editProfileLabel}>Name</Text>
+                <TextInput
+                  style={profileStyles.editProfileInput}
+                  value={editProfileData.name}
+                  onChangeText={(text) => setEditProfileData(prev => ({ ...prev, name: text }))}
+                  placeholder="Enter your name"
+                  placeholderTextColor="#999"
+                />
+              </View>
+
+              <View style={profileStyles.editProfileSection}>
+                <Text style={profileStyles.editProfileLabel}>Bio</Text>
+                <TextInput
+                  style={[profileStyles.editProfileInput, { height: 80, textAlignVertical: 'top' }]}
+                  value={editProfileData.bio}
+                  onChangeText={(text) => setEditProfileData(prev => ({ ...prev, bio: text }))}
+                  placeholder="Tell us about yourself"
+                  placeholderTextColor="#999"
+                  multiline
+                />
+              </View>
+
+              <View style={profileStyles.editProfileSection}>
+                <Text style={profileStyles.editProfileLabel}>Phone Number</Text>
+                <TextInput
+                  style={profileStyles.editProfileInput}
+                  value={editProfileData.phone}
+                  onChangeText={(text) => setEditProfileData(prev => ({ ...prev, phone: text }))}
+                  placeholder="Enter your phone number"
+                  placeholderTextColor="#999"
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              <View style={profileStyles.editProfileSection}>
+                <Text style={profileStyles.editProfileLabel}>Email</Text>
+                <TextInput
+                  style={[profileStyles.editProfileInput, { color: '#999' }]}
+                  value={editProfileData.email}
+                  editable={false}
+                  placeholder="Email (cannot be changed)"
+                  placeholderTextColor="#999"
+                />
+                <Text style={profileStyles.editProfileNote}>Email cannot be changed for security reasons</Text>
+              </View>
+
+              <View style={profileStyles.editProfileButtons}>
+                <TouchableOpacity 
+                  style={[profileStyles.editProfileButton, profileStyles.cancelButton]}
+                  onPress={() => setShowEditProfile(false)}
+                >
+                  <Text style={profileStyles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[profileStyles.editProfileButton, profileStyles.saveButton]}
+                  onPress={saveProfileChanges}
+                  disabled={savingProfile}
+                >
+                  {savingProfile ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={profileStyles.saveButtonText}>Save Changes</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </ScrollView>
           </View>
         </TouchableOpacity>

@@ -19,33 +19,43 @@ import { Animated, Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
+import {
+  useFonts,
+  Figtree_300Light,
+  Figtree_400Regular,
+  Figtree_500Medium,
+  Figtree_600SemiBold,
+  Figtree_700Bold,
+  Figtree_800ExtraBold,
+  Figtree_900Black,
+} from '@expo-google-fonts/figtree';
 
 const { width } = Dimensions.get('window');
 
 const onboardingData = [
   {
     id: 1,
-    headline: 'Earn Rewards.',
-    subheadline: '',
+    headline: 'Support local. Earn rewards.',
+    subheadline: 'Shop at your favorite small businesses and get rewarded every time.',
     description: '',
   },
   {
     id: 2,
-    headline: 'Discover Local Gems',
-    subheadline: 'Find aesthetic cafes, boba joints, and food spots around you — all offering exclusive Punch rewards.',
-    description: 'Personalized for where you go.',
+    headline: 'Points with every purchase.',
+    subheadline: 'Collect loyalty points automatically—no punch cards, no hassle.',
+    description: '',
   },
   {
     id: 3,
-    headline: 'Every visit earns a punch.',
-    subheadline: 'Hit the goal, unlock your reward — it\'s that easy.',
+    headline: 'Discover new spots near you.',
+    subheadline: 'Find cafes, shops, and services that reward you for showing up.',
     description: '',
   },
   {
     id: 4,
-    headline: 'Join the Community',
-    subheadline: 'See where your friends are punching. Share spots. Earn together.',
-    description: 'Loyalty is better when it\'s social.',
+    headline: 'Track, redeem, repeat.',
+    subheadline: 'Redeem points for exclusive deals and keep supporting local.',
+    description: '',
   },
 ];
 
@@ -193,12 +203,12 @@ function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext,
           {onboardingData.map((item: OnboardingItem, index: number) => (
             <View key={item.id} style={{ width: MODAL_WIDTH, alignItems: 'center', justifyContent: 'center' }}>
               <View style={{ maxWidth: 340, alignSelf: 'center' }}>
-                <CustomText variant="title" weight="bold" style={{ color: '#222', marginBottom: 12, textAlign: 'center' }}>{item.headline}</CustomText>
+                <CustomText variant="title" weight="bold" fontFamily="figtree" style={{ color: '#222', marginBottom: 12, textAlign: 'center' }}>{item.headline}</CustomText>
                 {item.subheadline ? (
-                  <CustomText variant="subtitle" weight="normal" style={{ color: '#666', marginBottom: 8, textAlign: 'center', fontWeight: '400' }}>{item.subheadline}</CustomText>
+                  <CustomText variant="subtitle" weight="normal" fontFamily="figtree" style={{ color: '#666', marginBottom: 8, textAlign: 'center', fontWeight: '400' }}>{item.subheadline}</CustomText>
                 ) : null}
                 {item.description ? (
-                  <CustomText variant="body" weight="normal" style={{ color: '#888', textAlign: 'center', fontWeight: '400', marginBottom: 12 }}>{item.description}</CustomText>
+                  <CustomText variant="body" weight="normal" fontFamily="figtree" style={{ color: '#888', textAlign: 'center', fontWeight: '400', marginBottom: 12 }}>{item.description}</CustomText>
                 ) : null}
               </View>
             </View>
@@ -207,7 +217,7 @@ function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext,
         {/* Navigation Buttons */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: 8 }}>
           <TouchableOpacity onPress={handleSkip}>
-            <CustomText variant="body" weight="semibold" style={{ color: '#FB7A20', opacity: 0.8 }}>Skip</CustomText>
+            <CustomText variant="body" weight="semibold" fontFamily="figtree" style={{ color: '#FB7A20', opacity: 0.8 }}>Skip</CustomText>
           </TouchableOpacity>
           <TouchableOpacity onPress={handleNext} style={{ backgroundColor: '#FB7A20', borderRadius: 30, padding: 16 }}>
             <AntDesign name="arrowright" size={28} color="#fff" />
@@ -315,12 +325,12 @@ export default function Onboarding() {
     return (
       <View key={item.id} style={{ width, alignItems: 'center', justifyContent: 'center' }}>
         <View style={{ maxWidth: 340, alignItems: 'center', justifyContent: 'center', marginTop: 12 }}>
-          <CustomText variant="title" weight="bold" style={[onboardingStyles.title, { color: 'white', marginBottom: 12, textAlign: 'center' }]}> {item.headline} </CustomText>
+          <CustomText variant="title" weight="bold" fontFamily="figtree" style={[onboardingStyles.title, { color: 'white', marginBottom: 12, textAlign: 'center' }]}> {item.headline} </CustomText>
           {item.subheadline ? (
-            <CustomText variant="subtitle" weight="medium" style={[onboardingStyles.subtitle, { color: 'white', marginBottom: 12, textAlign: 'center' }]}> {item.subheadline} </CustomText>
+            <CustomText variant="subtitle" weight="medium" fontFamily="figtree" style={[onboardingStyles.subtitle, { color: 'white', marginBottom: 12, textAlign: 'center' }]}> {item.subheadline} </CustomText>
           ) : null}
           {item.description ? (
-            <CustomText variant="body" weight="semibold" style={[onboardingStyles.description, { color: 'white', textAlign: 'center' }]}> {item.description} </CustomText>
+            <CustomText variant="body" weight="semibold" fontFamily="figtree" style={[onboardingStyles.description, { color: 'white', textAlign: 'center' }]}> {item.description} </CustomText>
           ) : null}
         </View>
       </View>

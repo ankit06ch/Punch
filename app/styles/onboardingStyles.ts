@@ -24,6 +24,7 @@ export default StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: 'Figtree_600SemiBold',
   },
   scrollView: {
     flex: 1,
@@ -52,6 +53,7 @@ export default StyleSheet.create({
     textAlign: 'center',
     marginBottom: 12,
     lineHeight: 34,
+    fontFamily: 'Figtree_700Bold',
   },
   subtitle: {
     fontSize: 16,
@@ -60,6 +62,7 @@ export default StyleSheet.create({
     marginBottom: 12,
     lineHeight: 22,
     opacity: 1,
+    fontFamily: 'Figtree_500Medium',
   },
   description: {
     fontSize: 15,
@@ -67,6 +70,7 @@ export default StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
     opacity: 1,
+    fontFamily: 'Figtree_400Regular',
   },
   bottomSection: {
     alignItems: 'center',
@@ -87,6 +91,7 @@ export default StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+    fontFamily: 'Figtree_700Bold',
   },
   dotsContainer: {
     flexDirection: 'row',

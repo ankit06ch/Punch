@@ -200,7 +200,7 @@ export default function SplashScreen() {
     ]).start(() => {
       setPeriodSettled(true);
       setTimeout(() => {
-        router.replace('../unauthenticated_tabs/onboarding');
+        router.replace('/unauthenticated_tabs/onboarding');
       }, FINAL_DELAY);
     });
   }, [showPeriod]);
