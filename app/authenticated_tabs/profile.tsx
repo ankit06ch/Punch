@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import profileStyles from '../styles/profileStyles';
 import { PanResponder } from 'react-native';
 import RestaurantModal from '../../components/RestaurantModal';
+import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
 import {
   useFonts,
   Figtree_300Light,
@@ -963,6 +964,9 @@ export default function Profile() {
 
   return (
     <View style={styles.container} onLayout={e => setContainerLayout(e.nativeEvent.layout)}>
+      {/* Animated Bubbles Background */}
+      <AnimatedBubblesBackground />
+      
       {/* Circle Background */}
       <View style={{
         position: 'absolute',

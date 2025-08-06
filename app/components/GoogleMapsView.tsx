@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { View, StyleSheet, Dimensions, TouchableOpacity, Alert, Platform, useColorScheme } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -25,6 +25,10 @@ interface GoogleMapsViewProps {
   fullScreen?: boolean; // New prop for full screen mode
 }
 
+export interface GoogleMapsViewRef {
+  resetToUserLocation: () => void;
+}
+
 const COLORS = {
   primary: '#FB7A20',
   secondary: '#1E3A8A',
@@ -35,9 +39,10 @@ const COLORS = {
   },
 };
 
-export default function GoogleMapsView({ restaurants, onRestaurantPress, fullScreen = false }: GoogleMapsViewProps) {
+const GoogleMapsView = forwardRef<GoogleMapsViewRef, GoogleMapsViewProps>(({ restaurants, onRestaurantPress, fullScreen = false }, ref) => {
   const router = useRouter();
   const colorScheme = useColorScheme();
+  const mapRef = useRef<MapView>(null);
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [region, setRegion] = useState<Region>({
     latitude: 34.2073, // Cumming, GA coordinates
@@ -91,6 +96,24 @@ export default function GoogleMapsView({ restaurants, onRestaurantPress, fullScr
     }
   };
 
+  // Expose resetToUserLocation method via ref
+  useImperativeHandle(ref, () => ({
+    resetToUserLocation: () => {
+      if (userLocation && mapRef.current) {
+        const newRegion = {
+          latitude: userLocation.coords.latitude,
+          longitude: userLocation.coords.longitude,
+          latitudeDelta: 0.0922,
+          longitudeDelta: 0.0421,
+        };
+        mapRef.current.animateToRegion(newRegion, 1000);
+      } else if (locationPermission) {
+        // If we don't have user location but have permission, get it
+        getCurrentLocation();
+      }
+    },
+  }));
+
   const handleMapPress = () => {
     if (!fullScreen) {
       // Navigate to full map screen
@@ -114,6 +137,7 @@ export default function GoogleMapsView({ restaurants, onRestaurantPress, fullScr
         ]} 
       >
         <MapView
+          ref={mapRef}
           style={styles.map}
           region={region}
           showsUserLocation={locationPermission}
@@ -161,6 +185,28 @@ export default function GoogleMapsView({ restaurants, onRestaurantPress, fullScr
             </BlurView>
           </TouchableOpacity>
         )}
+        
+        {/* Location reset button */}
+        {locationPermission && !fullScreen && (
+          <TouchableOpacity 
+            style={styles.locationButton}
+            onPress={() => {
+              if (userLocation && mapRef.current) {
+                const newRegion = {
+                  latitude: userLocation.coords.latitude,
+                  longitude: userLocation.coords.longitude,
+                  latitudeDelta: 0.0922,
+                  longitudeDelta: 0.0421,
+                };
+                mapRef.current.animateToRegion(newRegion, 1000);
+              } else {
+                getCurrentLocation();
+              }
+            }}
+          >
+            <AntDesign name="arrowup" size={24} color={COLORS.primary} />
+          </TouchableOpacity>
+        )}
       </View>
       
       {!locationPermission && (
@@ -178,7 +224,7 @@ export default function GoogleMapsView({ restaurants, onRestaurantPress, fullScr
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -253,4 +299,25 @@ const styles = StyleSheet.create({
   permissionButtonText: {
     color: 'white',
   },
-}); 
+  locationButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    zIndex: 9999,
+  },
+});
+
+export default GoogleMapsView;
