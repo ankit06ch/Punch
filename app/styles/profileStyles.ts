@@ -563,6 +563,83 @@ const profileStyles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  // Liked Restaurants Styles
+  likedRestaurantCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  likedRestaurantContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  likedRestaurantIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  likedRestaurantInfo: {
+    flex: 1,
+  },
+  likedRestaurantName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2C3E50',
+    marginBottom: 4,
+    fontFamily: 'Figtree_600SemiBold',
+  },
+  likedRestaurantCuisine: {
+    fontSize: 14,
+    color: '#7F8C8D',
+    marginBottom: 2,
+    fontFamily: 'Figtree_400Regular',
+  },
+  likedRestaurantLocation: {
+    fontSize: 12,
+    color: '#BDC3C7',
+    fontFamily: 'Figtree_400Regular',
+  },
+  likedRestaurantButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(44, 62, 80, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyIcon: {
+    marginBottom: 16,
+    opacity: 0.6,
+  },
+  emptyText: {
+    color: '#7F8C8D',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+    fontFamily: 'Figtree_600SemiBold',
+  },
+  emptySubtext: {
+    color: '#BDC3C7',
+    fontSize: 14,
+    textAlign: 'center',
+    fontFamily: 'Figtree_400Regular',
+  },
 });
 
 export default profileStyles;

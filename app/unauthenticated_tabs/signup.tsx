@@ -205,7 +205,7 @@ export default function SignupScreen() {
         }}
         onPress={() => setMode('email')}
       >
-        <CustomText style={{ color: mode === 'email' ? 'white' : '#7A7A7A', fontWeight: '600', fontSize: 16 }}>Email</CustomText>
+                        <CustomText fontFamily="figtree" style={{ color: mode === 'email' ? 'white' : '#7A7A7A', fontWeight: '600', fontSize: 16 }}>Email</CustomText>
       </TouchableOpacity>
       <TouchableOpacity
         style={{
@@ -218,7 +218,7 @@ export default function SignupScreen() {
         }}
         onPress={() => setMode('phone')}
       >
-        <CustomText style={{ color: mode === 'phone' ? 'white' : '#7A7A7A', fontWeight: '600', fontSize: 16 }}>Phone</CustomText>
+                        <CustomText fontFamily="figtree" style={{ color: mode === 'phone' ? 'white' : '#7A7A7A', fontWeight: '600', fontSize: 16 }}>Phone</CustomText>
       </TouchableOpacity>
     </View>
   );
@@ -355,16 +355,16 @@ export default function SignupScreen() {
                 }}
               >
                 {/* Animated typewriter prompt and all step content here (move from Animated.View) */}
-                <CustomText variant="title" weight="bold" style={styles.prompt}>
-                  {current.prompt}
-                </CustomText>
+                              <CustomText variant="title" weight="bold" fontFamily="figtree" style={styles.prompt}>
+                {current.prompt}
+              </CustomText>
                 {/* Name step: show name input */}
                 {current.key === 'name' && (
                   <View style={styles.inputContainer}>
                     <AntDesign name="user" size={20} color="#FB7A20" style={styles.inputIconCentered} />
                     <TextInput
                       placeholder="Your full name"
-                      style={styles.input}
+                      style={[styles.input, { fontFamily: 'Figtree_400Regular' }]}
                       value={form.name}
                       onChangeText={text => {
                         setForm({ ...form, name: text });
@@ -386,7 +386,7 @@ export default function SignupScreen() {
                       <AntDesign name="lock" size={20} color="#FB7A20" style={styles.inputIconCentered} />
                       <TextInput
                         placeholder="Password"
-                        style={styles.input}
+                        style={[styles.input, { fontFamily: 'Figtree_400Regular' }]}
                         value={form.password}
                         onChangeText={text => {
                           setForm({ ...form, password: text });
@@ -404,15 +404,18 @@ export default function SignupScreen() {
                     {/* Terms and Privacy checkbox */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 8 }}>
                       <CustomCheckbox value={agree} onValueChange={setAgree} />
-                      <CustomText style={{ marginLeft: 8, color: '#222' }}>
-                        I agree to <CustomText style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://your-terms-url.com')}>Terms of Service</CustomText>{' '}<CustomText style={{ color: '#222' }}>&</CustomText>{' '}<CustomText style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://your-privacy-url.com')}>Privacy Policy</CustomText>
-                      </CustomText>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                          <CustomText fontFamily="figtree" style={{ color: '#222' }}>I agree to </CustomText>
+                          <CustomText fontFamily="figtree" style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://your-terms-url.com')}>Terms of Service</CustomText>
+                          <CustomText fontFamily="figtree" style={{ color: '#222' }}>{' & '}</CustomText>
+                          <CustomText fontFamily="figtree" style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://your-privacy-url.com')}>Privacy Policy</CustomText>
+                      </View>
                     </View>
                     {/* Back and Create Account buttons in the same row */}
                     <View style={styles.buttonRow}>
                       {step > 0 && (
                         <TouchableOpacity style={styles.secondaryButton} onPress={handleBack} disabled={loading}>
-                          <CustomText variant="button" weight="bold" style={styles.secondaryButtonText}>Back</CustomText>
+                          <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.secondaryButtonText}>Back</CustomText>
                         </TouchableOpacity>
                       )}
                       <TouchableOpacity
@@ -423,7 +426,7 @@ export default function SignupScreen() {
                         {loading ? (
                           <ActivityIndicator size="small" color="#FB7A20" />
                         ) : (
-                          <CustomText variant="button" weight="bold" style={styles.signupButtonText}>
+                          <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.signupButtonText}>
                             Create Account
                           </CustomText>
                         )}
@@ -438,7 +441,7 @@ export default function SignupScreen() {
                       <AntDesign name="mail" size={20} color="#FB7A20" style={styles.inputIconCentered} />
                       <TextInput
                         placeholder="Email"
-                        style={styles.input}
+                        style={[styles.input, { fontFamily: 'Figtree_400Regular' }]}
                         value={form.email}
                         onChangeText={text => {
                           setForm({ ...form, email: text });
@@ -457,7 +460,7 @@ export default function SignupScreen() {
                       <AntDesign name="phone" size={20} color="#FB7A20" style={styles.inputIconCentered} />
                       <TextInput
                         placeholder="Phone (optional)"
-                        style={styles.input}
+                        style={[styles.input, { fontFamily: 'Figtree_400Regular' }]}
                         value={formatPhoneNumber(form.phone)}
                         onChangeText={text => {
                           setForm({ ...form, phone: text.replace(/\D/g, '').slice(0, 10) });
@@ -479,11 +482,11 @@ export default function SignupScreen() {
                   <View style={{ width: '100%', marginTop: 12, marginBottom: 8 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                       <Switch value={notifEmail} onValueChange={setNotifEmail} thumbColor={notifEmail ? '#FB7A20' : '#ccc'} trackColor={{ true: '#fcd7b0', false: '#eee' }} />
-                      <CustomText style={{ marginLeft: 8, color: '#222' }}>Email me updates{' '}<CustomText style={{ color: '#222' }}>&</CustomText>{' '}rewards</CustomText>
+                      <CustomText fontFamily="figtree" style={{ marginLeft: 8, color: '#222' }}>Email me updates{' '}<CustomText fontFamily="figtree" style={{ color: '#222' }}>&</CustomText>{' '}rewards</CustomText>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <Switch value={notifText} onValueChange={setNotifText} thumbColor={notifText ? '#FB7A20' : '#ccc'} trackColor={{ true: '#fcd7b0', false: '#eee' }} />
-                      <CustomText style={{ marginLeft: 8, color: '#222' }}>Text me updates{' '}<CustomText style={{ color: '#222' }}>&</CustomText>{' '}rewards</CustomText>
+                      <CustomText fontFamily="figtree" style={{ marginLeft: 8, color: '#222' }}>Text me updates{' '}<CustomText fontFamily="figtree" style={{ color: '#222' }}>&</CustomText>{' '}rewards</CustomText>
                     </View>
                   </View>
                 )}
@@ -491,7 +494,7 @@ export default function SignupScreen() {
                 {error ? (
                   <View style={styles.errorContainer}>
                     <AntDesign name="exclamationcircleo" size={16} color="#FB7A20" />
-                    <CustomText variant="body" weight="medium" style={styles.errorText}>
+                    <CustomText variant="body" weight="medium" fontFamily="figtree" style={styles.errorText}>
                       {error}
                     </CustomText>
                   </View>
@@ -505,7 +508,7 @@ export default function SignupScreen() {
                       onPress={handleNext}
                       disabled={loading || !(form.name && form.name.trim().length > 1)}
                     >
-                      <CustomText variant="button" weight="bold" style={styles.nextButtonText}>
+                      <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.nextButtonText}>
                         Next
                       </CustomText>
                     </TouchableOpacity>
@@ -516,7 +519,7 @@ export default function SignupScreen() {
                   <View style={styles.buttonRow}>
                     {step > 0 && (
                       <TouchableOpacity style={styles.secondaryButton} onPress={handleBack} disabled={loading}>
-                        <CustomText variant="button" weight="bold" style={styles.secondaryButtonText}>Back</CustomText>
+                        <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.secondaryButtonText}>Back</CustomText>
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity
@@ -524,7 +527,7 @@ export default function SignupScreen() {
                       onPress={handleNext}
                       disabled={loading || !form.email || !/.+@.+\..+/.test(form.email)}
                     >
-                      <CustomText variant="button" weight="bold" style={styles.nextButtonText}>
+                      <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.nextButtonText}>
                         Next
                       </CustomText>
                     </TouchableOpacity>
@@ -533,11 +536,11 @@ export default function SignupScreen() {
                 {/* On the password step, do not render Back or Next buttons */}
                 {/* Login Link inside modal */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 24 }}>
-                  <CustomText variant="body" weight="normal" style={styles.loginText}>
+                  <CustomText variant="body" weight="normal" fontFamily="figtree" style={styles.loginText}>
                     Already have an account?{' '}
                   </CustomText>
                   <TouchableOpacity onPress={() => router.push('../unauthenticated_tabs/login')}>
-                    <CustomText variant="body" weight="bold" style={styles.loginLink}>
+                    <CustomText variant="body" weight="bold" fontFamily="figtree" style={styles.loginLink}>
                       Login
                     </CustomText>
                   </TouchableOpacity>

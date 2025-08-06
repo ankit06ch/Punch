@@ -26,8 +26,8 @@ export default function LoginScreen() {
 
   const MODAL_WIDTH = width - 48;
   const MODAL_HEIGHT = 420;
-  const modalAnim = useRef(new Animated.Value(MODAL_HEIGHT + 80)).current;
-  const keyboardOffset = 80;
+  const modalAnim = useRef(new Animated.Value(MODAL_HEIGHT + 40)).current;
+  const keyboardOffset = 40;
 
   useEffect(() => {
     Animated.spring(modalAnim, {
@@ -38,9 +38,13 @@ export default function LoginScreen() {
     }).start();
 
     const handleKeyboardShow = (e: KeyboardEvent) => {
+      const keyboardHeight = e.endCoordinates.height;
+      const screenHeight = Dimensions.get('window').height;
+      const maxOffset = Math.min(keyboardHeight * 0.2, 40); // More conservative offset
+      
       Animated.timing(modalAnim, {
-        toValue: -keyboardOffset,
-        duration: 300,
+        toValue: -maxOffset,
+        duration: 250,
         useNativeDriver: true,
         easing: Easing.out(Easing.cubic),
       }).start();
@@ -48,7 +52,7 @@ export default function LoginScreen() {
     const handleKeyboardHide = () => {
       Animated.timing(modalAnim, {
         toValue: 0,
-        duration: 300,
+        duration: 200,
         useNativeDriver: true,
         easing: Easing.out(Easing.cubic),
       }).start();
@@ -171,7 +175,7 @@ export default function LoginScreen() {
           position: 'absolute',
           left: 24,
           right: 24,
-          bottom: 0,
+          bottom: 40,
           width: MODAL_WIDTH,
           zIndex: 10,
           minHeight: MODAL_HEIGHT,
@@ -206,10 +210,10 @@ export default function LoginScreen() {
           >
             {/* Welcome Text */}
             <View style={loginStyles.textContainer}>
-              <CustomText variant="title" weight="bold" style={loginStyles.title}>
+              <CustomText variant="title" weight="bold" fontFamily="figtree" style={loginStyles.title}>
                 Welcome Back!
               </CustomText>
-              <CustomText variant="subtitle" weight="medium" style={loginStyles.subtitle}>
+              <CustomText variant="subtitle" weight="medium" fontFamily="figtree" style={loginStyles.subtitle}>
                 Login to your Punch account
               </CustomText>
             </View>
@@ -274,7 +278,7 @@ export default function LoginScreen() {
                   <AntDesign name="mail" size={20} color="#FB7A20" style={loginStyles.inputIcon} />
                   <TextInput
                     placeholder="Email"
-                    style={loginStyles.input}
+                    style={[loginStyles.input, { fontFamily: 'Figtree_400Regular' }]}
                     value={email}
                     onChangeText={setEmail}
                     keyboardType="email-address"
@@ -290,7 +294,7 @@ export default function LoginScreen() {
                   <AntDesign name="phone" size={20} color="#FB7A20" style={loginStyles.inputIcon} />
                   <TextInput
                     placeholder="Phone"
-                    style={loginStyles.input}
+                    style={[loginStyles.input, { fontFamily: 'Figtree_400Regular' }]}
                     value={formatPhoneNumber(phone)}
                     onChangeText={text => setPhone(text.replace(/\D/g, '').slice(0, 10))}
                     keyboardType="phone-pad"
@@ -307,7 +311,7 @@ export default function LoginScreen() {
                   onPress={handleNext}
                   disabled={loading}
                 >
-                  <CustomText variant="button" weight="bold" style={loginStyles.loginButtonText}>
+                  <CustomText variant="button" weight="bold" fontFamily="figtree" style={loginStyles.loginButtonText}>
                     Next
                   </CustomText>
                 </TouchableOpacity>
@@ -325,7 +329,7 @@ export default function LoginScreen() {
                       <AntDesign name="lock" size={20} color="#FB7A20" style={loginStyles.inputIcon} />
                       <TextInput
                         placeholder="Password"
-                        style={[loginStyles.input, { flex: 1 }]}
+                        style={[loginStyles.input, { flex: 1, fontFamily: 'Figtree_400Regular' }]}
                         value={password}
                         onChangeText={setPassword}
                         secureTextEntry={!showPassword}
@@ -353,7 +357,7 @@ export default function LoginScreen() {
                       {loading ? (
                         <ActivityIndicator size="small" color="white" />
                       ) : (
-                        <CustomText variant="button" weight="bold" style={loginStyles.loginButtonText}>
+                        <CustomText variant="button" weight="bold" fontFamily="figtree" style={loginStyles.loginButtonText}>
                           Log in
                         </CustomText>
                       )}
@@ -364,7 +368,7 @@ export default function LoginScreen() {
               {error ? (
                 <View style={loginStyles.errorContainer}>
                   <AntDesign name="exclamationcircleo" size={16} color="#FB7A20" />
-                  <CustomText variant="body" weight="medium" style={loginStyles.errorText}>
+                  <CustomText variant="body" weight="medium" fontFamily="figtree" style={loginStyles.errorText}>
                     {error}
                   </CustomText>
                 </View>
@@ -372,11 +376,11 @@ export default function LoginScreen() {
             </View>
             {/* Sign Up Link */}
             <View style={loginStyles.signupContainer}>
-              <CustomText variant="body" weight="normal" style={loginStyles.signupText}>
+              <CustomText variant="body" weight="normal" fontFamily="figtree" style={loginStyles.signupText}>
                 {"Don't have an account? "}
               </CustomText>
               <TouchableOpacity onPress={() => router.push('../unauthenticated_tabs/signup')}>
-                <CustomText variant="body" weight="bold" style={loginStyles.signupLink}>
+                <CustomText variant="body" weight="bold" fontFamily="figtree" style={loginStyles.signupLink}>
                   Sign Up
                 </CustomText>
               </TouchableOpacity>

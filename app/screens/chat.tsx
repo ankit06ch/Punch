@@ -13,7 +13,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../../firebase/config';
-import { doc, getDoc, addDoc, collection, serverTimestamp, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, serverTimestamp, onSnapshot, query, where, orderBy, updateDoc, writeBatch, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { StyleSheet } from 'react-native';
 
 const ORANGE = '#fb7a20';
@@ -26,12 +26,75 @@ export default function ChatScreen() {
   const [chatInput, setChatInput] = useState('');
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [hasMarkedAsRead, setHasMarkedAsRead] = useState(false);
 
   useEffect(() => {
     if (conversationId) {
       fetchConversation();
     }
   }, [conversationId]);
+
+  // Mark messages as read when chat is opened
+  useEffect(() => {
+    if (messages.length > 0 && !hasMarkedAsRead) {
+      markMessagesAsRead();
+    }
+  }, [messages, hasMarkedAsRead]);
+
+  // Mark messages as read when they come into view
+  const handleMessageView = (message: any) => {
+    if (message && (message.read === false || message.read === undefined) && message.toUserId === auth.currentUser?.uid) {
+      markSingleMessageAsRead(message);
+    }
+  };
+
+  const markSingleMessageAsRead = async (message: any) => {
+    try {
+      if (conversationId === 'puncho_bot') {
+        // For Puncho messages, update in notifications collection
+        await updateDoc(doc(db, 'notifications', message.id), { read: true });
+      } else {
+        // For regular messages, update in messages collection
+        await updateDoc(doc(db, 'messages', message.id), { read: true });
+      }
+    } catch (error) {
+      console.error('Error marking single message as read:', error);
+    }
+  };
+
+  const markMessagesAsRead = async () => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+
+      const unreadMessages = messages.filter(msg => 
+        (msg.read === false || msg.read === undefined) && 
+        msg.toUserId === currentUser.uid && 
+        msg.fromUserId !== currentUser.uid
+      );
+
+      if (unreadMessages.length === 0) return;
+
+      const batch = writeBatch(db);
+
+      unreadMessages.forEach(msg => {
+        if (conversationId === 'puncho_bot') {
+          // For Puncho messages, update in notifications collection
+          const notificationRef = doc(db, 'notifications', msg.id);
+          batch.update(notificationRef, { read: true });
+        } else {
+          // For regular messages, update in messages collection
+          const messageRef = doc(db, 'messages', msg.id);
+          batch.update(messageRef, { read: true });
+        }
+      });
+
+      await batch.commit();
+      setHasMarkedAsRead(true);
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  };
 
   const fetchConversation = async () => {
     try {
@@ -131,6 +194,7 @@ export default function ChatScreen() {
           toUserId: conversationId,
           timestamp: serverTimestamp(),
           message: chatInput.trim(),
+          read: false, // Messages start as unread
         });
       }
       setChatInput('');
@@ -138,6 +202,65 @@ export default function ChatScreen() {
       console.error('Error sending message:', error);
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleFollowRequestResponse = async (notificationId: string, response: 'accept' | 'deny') => {
+    try {
+      // Get the notification to find the requester
+      const notificationRef = doc(db, 'notifications', notificationId);
+      const notificationSnap = await getDoc(notificationRef);
+      
+      if (!notificationSnap.exists()) return;
+      
+      const notificationData = notificationSnap.data();
+      const requesterId = notificationData.fromUserId;
+      const currentUserId = auth.currentUser?.uid;
+      
+      if (!currentUserId || !requesterId) return;
+
+      // Update notification status
+      await updateDoc(notificationRef, {
+        status: response,
+        read: true
+      });
+
+      if (response === 'accept') {
+        // Add each user to the other's following/followers lists
+        await updateDoc(doc(db, 'users', currentUserId), {
+          followingUids: arrayUnion(requesterId),
+          followingCount: (await getDoc(doc(db, 'users', currentUserId))).data()?.followingCount + 1 || 1,
+        });
+        
+        await updateDoc(doc(db, 'users', requesterId), {
+          followerUids: arrayUnion(currentUserId),
+          followersCount: (await getDoc(doc(db, 'users', requesterId))).data()?.followersCount + 1 || 1,
+        });
+
+        // Remove from pending requests
+        await updateDoc(doc(db, 'users', currentUserId), {
+          pendingFollowRequests: arrayRemove(requesterId)
+        });
+
+        // Send acceptance message to requester
+        await addDoc(collection(db, 'notifications'), {
+          type: 'follow_request_accepted',
+          fromUserId: 'puncho_bot',
+          toUserId: requesterId,
+          timestamp: serverTimestamp(),
+          read: false,
+          message: `${(await getDoc(doc(db, 'users', currentUserId))).data()?.name || 'Someone'} has accepted your request!`,
+          acceptedBy: currentUserId,
+        });
+      } else {
+        // Remove from pending requests
+        await updateDoc(doc(db, 'users', currentUserId), {
+          pendingFollowRequests: arrayRemove(requesterId)
+        });
+      }
+
+    } catch (error) {
+      console.error('Error handling follow request response:', error);
     }
   };
 
@@ -171,10 +294,26 @@ export default function ChatScreen() {
           style={styles.messagesContainer}
           contentContainerStyle={styles.messagesContent}
           showsVerticalScrollIndicator={false}
+          onScroll={(event) => {
+            // Mark messages as read when user scrolls to view them
+            const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+            const isNearBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 100;
+            
+            if (isNearBottom) {
+              messages.forEach(msg => {
+                if ((msg.read === false || msg.read === undefined) && msg.toUserId === auth.currentUser?.uid) {
+                  handleMessageView(msg);
+                }
+              });
+            }
+          }}
+          scrollEventThrottle={16}
         >
           {messages.map((msg, idx) => {
             const isOutgoing = msg.fromUserId === auth.currentUser?.uid;
             const isPuncho = msg.fromUserId === 'puncho_bot';
+            const isFollowRequest = msg.type === 'follow_request' && msg.status === 'pending';
+            
             return (
               <View
                 key={msg.id || idx}
@@ -182,14 +321,44 @@ export default function ChatScreen() {
                   styles.messageBubble,
                   isOutgoing ? styles.outgoingMessage : null,
                   isPuncho ? styles.punchoMessage : null,
+                  isFollowRequest ? styles.followRequestMessage : null,
                 ]}
               >
                 <Text style={[styles.messageText, isOutgoing || isPuncho ? { color: '#fff' } : null]}>
                   {msg.message}
                 </Text>
-                <Text style={[styles.messageTime, isOutgoing || isPuncho ? { color: 'rgba(255,255,255,0.7)' } : null]}>
-                  {msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                </Text>
+                
+                {/* Follow Request Buttons */}
+                {isFollowRequest && (
+                  <View style={styles.followRequestButtons}>
+                    <TouchableOpacity
+                      style={styles.acceptButton}
+                      onPress={() => handleFollowRequestResponse(msg.id, 'accept')}
+                    >
+                      <Text style={styles.acceptButtonText}>Accept</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.denyButton}
+                      onPress={() => handleFollowRequestResponse(msg.id, 'deny')}
+                    >
+                      <Text style={styles.denyButtonText}>Deny</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                
+                <View style={styles.messageFooter}>
+                  <Text style={[styles.messageTime, isOutgoing || isPuncho ? { color: 'rgba(255,255,255,0.7)' } : null]}>
+                    {msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                  </Text>
+                  {isOutgoing && (
+                    <Ionicons 
+                      name={msg.read ? "checkmark-done" : "checkmark"} 
+                      size={16} 
+                      color={msg.read ? (isOutgoing ? 'rgba(255,255,255,0.9)' : '#4CAF50') : 'rgba(255,255,255,0.5)'} 
+                      style={{ marginLeft: 4 }}
+                    />
+                  )}
+                </View>
               </View>
             );
           })}
@@ -296,13 +465,54 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 4,
-    alignSelf: 'flex-end',
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 4,
   },
   emptyText: {
     textAlign: 'center',
     color: '#888',
     fontSize: 16,
     marginTop: 40,
+  },
+  followRequestMessage: {
+    backgroundColor: '#fff3cd',
+    borderLeftWidth: 4,
+    borderLeftColor: '#ffc107',
+  },
+  followRequestButtons: {
+    flexDirection: 'row',
+    marginTop: 12,
+    gap: 8,
+  },
+  acceptButton: {
+    backgroundColor: '#28a745',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    flex: 1,
+    alignItems: 'center',
+  },
+  acceptButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  denyButton: {
+    backgroundColor: '#dc3545',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    flex: 1,
+    alignItems: 'center',
+  },
+  denyButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   inputBar: {
     flexDirection: 'row',

@@ -58,7 +58,7 @@ const discoverStyles = StyleSheet.create({
   restaurantCard: {
     backgroundColor: '#f7f7f7',
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
     marginBottom: 16,
     elevation: 3,
     shadowColor: '#000',
@@ -76,7 +76,7 @@ const discoverStyles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 20,
+    marginRight: 16,
     shadowColor: '#fb7a20',
     shadowOpacity: 0.15,
     shadowRadius: 8,
@@ -94,18 +94,20 @@ const discoverStyles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
     rowGap: 8, // Add vertical gap between rows (supported in RN 0.71+)
+    justifyContent: 'flex-start', // Align badges to the left
+    flex: 1, // Take up available space
   },
   badge: {
     backgroundColor: '#fb7a20',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginRight: 8,
-    marginBottom: 8, // Add bottom margin for vertical spacing
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginRight: 3, // Reduced from 4 to allow more badges
+    marginBottom: 4, // Reduced from 6 for tighter spacing
   },
   badgeText: {
     color: 'white',
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '600',
   },
   cardTitle: {
