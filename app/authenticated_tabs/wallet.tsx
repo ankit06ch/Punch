@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, FlatList, Dimensions, TouchableOpacity, StyleSheet, TextInput, ScrollView, Modal, Animated } from 'react-native';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+import { View, Text, FlatList, Dimensions, TouchableOpacity, StyleSheet, TextInput, ScrollView, Modal, Animated, PanResponder } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { collection, getDocs, doc, getDoc, updateDoc, arrayRemove } from 'firebase/firestore';
+import { auth, db } from '../../firebase/config';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomText from '../../components/CustomText';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
 import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
 import styles, { CARD_WIDTH, CARD_HEIGHT } from '../styles/walletStyles';
+import RestaurantModal from '../../components/RestaurantModal';
 import {
   useFonts,
   Figtree_300Light,
@@ -66,27 +67,93 @@ function GlassCard({ children, style }: { children: React.ReactNode; style?: any
   );
 }
 
-function CreditCardPunchCard({ card, onMenuPress, isFocused }: { 
+function CreditCardPunchCard({ 
+  card, 
+  isFocused, 
+  isShaking, 
+  onPress, 
+  onLongPress, 
+  onDeletePress 
+}: { 
   card: any; 
-  onMenuPress: () => void; 
   isFocused: boolean;
+  isShaking: boolean;
+  onPress: () => void;
+  onLongPress: () => void;
+  onDeletePress: () => void;
 }) {
   const progress = (card.punches || 0) / (card.total || 10);
   const punchesToReward = (card.total || 10) - (card.punches || 0);
   
+  // Shaking animation with rotation
+  const shakeAnimation = useRef(new Animated.Value(0)).current;
+  const rotateAnimation = useRef(new Animated.Value(0)).current;
+  
+  useEffect(() => {
+    if (isShaking) {
+      const shake = Animated.loop(
+        Animated.sequence([
+          Animated.timing(shakeAnimation, { toValue: 10, duration: 150, useNativeDriver: true }),
+          Animated.timing(shakeAnimation, { toValue: -10, duration: 150, useNativeDriver: true }),
+          Animated.timing(shakeAnimation, { toValue: 10, duration: 150, useNativeDriver: true }),
+          Animated.timing(shakeAnimation, { toValue: 0, duration: 150, useNativeDriver: true }),
+        ])
+      );
+      
+      const rotate = Animated.loop(
+        Animated.sequence([
+          Animated.timing(rotateAnimation, { toValue: 0.05, duration: 200, useNativeDriver: true }),
+          Animated.timing(rotateAnimation, { toValue: -0.05, duration: 200, useNativeDriver: true }),
+          Animated.timing(rotateAnimation, { toValue: 0.05, duration: 200, useNativeDriver: true }),
+          Animated.timing(rotateAnimation, { toValue: 0, duration: 200, useNativeDriver: true }),
+        ])
+      );
+      
+      shake.start();
+      rotate.start();
+      return () => {
+        shake.stop();
+        rotate.stop();
+      };
+    } else {
+      shakeAnimation.setValue(0);
+      rotateAnimation.setValue(0);
+    }
+  }, [isShaking]);
+  
   return (
-    <View style={[
-      styles.creditCard, 
-      { 
-        backgroundColor: card.color,
-        width: CARD_WIDTH, // Always use full width
-        transform: [{ scale: isFocused ? 1 : 0.9 }], // Only scale, don't change width
-      }
-    ]}>
-      {/* Menu Button */}
-      <TouchableOpacity style={styles.cardMenuButton} onPress={onMenuPress}>
-        <AntDesign name="ellipsis1" size={16} color="white" />
-      </TouchableOpacity>
+    <TouchableOpacity
+      onPress={onPress}
+      onLongPress={onLongPress}
+      activeOpacity={0.9}
+    >
+      <Animated.View style={[
+        styles.creditCard, 
+        { 
+          backgroundColor: card.color,
+          width: CARD_WIDTH,
+                  transform: [
+          { scale: isFocused ? 1 : 0.9 },
+          { translateX: shakeAnimation },
+          { rotate: rotateAnimation.interpolate({
+            inputRange: [-0.05, 0.05],
+            outputRange: ['-3deg', '3deg']
+          })}
+        ],
+        }
+      ]}>
+        {/* Delete Button - only show when shaking */}
+        {isShaking && (
+          <TouchableOpacity 
+            style={styles.deleteButton} 
+            onPress={onDeletePress}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <View style={styles.deleteButtonCircle}>
+              <AntDesign name="close" size={12} color="white" />
+            </View>
+          </TouchableOpacity>
+        )}
 
       {/* Card Header */}
       <View style={styles.cardHeader}>
@@ -94,7 +161,16 @@ function CreditCardPunchCard({ card, onMenuPress, isFocused }: {
           <View style={styles.cardLogo}>
             <AntDesign name="star" size={20} color="white" />
           </View>
-          <CustomText variant="title" weight="bold" fontFamily="figtree" style={styles.cardBusinessName}>
+          <CustomText 
+            variant="title" 
+            weight="bold" 
+            fontFamily="figtree" 
+            style={styles.cardBusinessName}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            adjustsFontSizeToFit={true}
+            minimumFontSize={12}
+          >
             {card.name || card.businessName || 'Business'}
           </CustomText>
         </View>
@@ -105,14 +181,28 @@ function CreditCardPunchCard({ card, onMenuPress, isFocused }: {
         <View style={styles.cardInfo}>
           <View style={styles.infoRow}>
             <Ionicons name="location" size={16} color="rgba(255,255,255,0.8)" />
-            <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.cardLocation}>
+            <CustomText 
+              variant="caption" 
+              weight="normal" 
+              fontFamily="figtree" 
+              style={styles.cardLocation}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {card.location || '123 Main St, City'}
             </CustomText>
           </View>
           
           <View style={styles.infoRow}>
             <Ionicons name="time" size={16} color="rgba(255,255,255,0.8)" />
-            <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.cardLastUsed}>
+            <CustomText 
+              variant="caption" 
+              weight="normal" 
+              fontFamily="figtree" 
+              style={styles.cardLastUsed}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               Last used: {card.lastUsed || '2 days ago'}
             </CustomText>
           </View>
@@ -128,7 +218,8 @@ function CreditCardPunchCard({ card, onMenuPress, isFocused }: {
           </View>
         </View>
       </View>
-    </View>
+    </Animated.View>
+  </TouchableOpacity>
   );
 }
 
@@ -315,6 +406,8 @@ function TransactionItem({ tx }: { tx: any }) {
   );
 }
 
+
+
 // Sample transaction data for UI
 const SAMPLE_TRANSACTIONS = [
   {
@@ -375,6 +468,12 @@ export default function Wallet() {
   const [showAllTransactions, setShowAllTransactions] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
+  const [restaurantModalVisible, setRestaurantModalVisible] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [cardToDelete, setCardToDelete] = useState<any>(null);
+  const [shakingCards, setShakingCards] = useState<Set<string>>(new Set());
+  const [liked, setLiked] = useState<string[]>([]);
   const flatListRef = useRef<FlatList<any>>(null);
 
   useEffect(() => {
@@ -437,6 +536,98 @@ export default function Wallet() {
     }
   };
 
+
+
+  const handleCardLongPress = (card: any) => {
+    // Long press - start shaking and show delete button on all cards
+    setShakingCards(new Set(filteredRestaurants.map(c => c.id)));
+  };
+
+  const handleDeleteButtonPress = (card: any) => {
+    setCardToDelete(card);
+    setDeleteModalVisible(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!cardToDelete) return;
+    
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      // Remove from user's punch cards
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        punchCards: arrayRemove(cardToDelete.id)
+      });
+
+      // Update local state
+      setRestaurants(prev => prev.filter(card => card.id !== cardToDelete.id));
+      setShakingCards(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(cardToDelete.id);
+        return newSet;
+      });
+    } catch (error) {
+      console.error('Error deleting card:', error);
+    }
+
+    setDeleteModalVisible(false);
+    setCardToDelete(null);
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteModalVisible(false);
+    setCardToDelete(null);
+    // Stop shaking all cards
+    setShakingCards(new Set());
+  };
+
+  const handleCardPress = (card: any) => {
+    // If cards are shaking, stop shaking and don't open restaurant modal
+    if (shakingCards.size > 0) {
+      setShakingCards(new Set());
+      return;
+    }
+    // Single tap - show restaurant modal
+    setSelectedRestaurant(card);
+    setRestaurantModalVisible(true);
+  };
+
+  const handleRestaurantModalClose = () => {
+    setRestaurantModalVisible(false);
+    setSelectedRestaurant(null);
+  };
+
+  const toggleLike = async (restaurantId: string) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        const currentLiked = userDoc.data()?.likedRestaurants || [];
+        const isLiked = currentLiked.includes(restaurantId);
+        
+        if (isLiked) {
+          await updateDoc(userRef, {
+            likedRestaurants: arrayRemove(restaurantId)
+          });
+          setLiked(currentLiked.filter(id => id !== restaurantId));
+        } else {
+          await updateDoc(userRef, {
+            likedRestaurants: arrayUnion(restaurantId)
+          });
+          setLiked([...currentLiked, restaurantId]);
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+    }
+  };
+
   const handleViewAllTransactions = () => {
     setShowAllTransactions(!showAllTransactions);
   };
@@ -480,21 +671,21 @@ export default function Wallet() {
     <View style={styles.container}>
       <AnimatedBubblesBackground />
       <SafeAreaView style={styles.safeArea}>
+        {/* Fixed Glass Header */}
+        <View style={styles.fixedGlassHeader}>
+          <BlurView intensity={20} tint="light" style={styles.glassHeader}>
+            <CustomText variant="title" weight="bold" fontFamily="figtree" style={styles.glassTitle}>
+              My Wallet
+            </CustomText>
+          </BlurView>
+        </View>
+
+        {/* Scrollable Content */}
         <ScrollView 
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <CustomText variant="title" weight="bold" fontFamily="figtree" style={styles.title}>
-              My Wallet
-            </CustomText>
-            <CustomText variant="subtitle" weight="normal" fontFamily="figtree" style={styles.subtitle}>
-              Manage your punch cards and rewards
-            </CustomText>
-          </View>
-
           {/* Punch Cards Section - No white box */}
           <View style={styles.punchCardSection}>
             <View style={styles.punchCardHeader}>
@@ -552,14 +743,19 @@ export default function Wallet() {
                   <View style={styles.cardWrapper}>
                     <CreditCardPunchCard 
                       card={item} 
-                      onMenuPress={() => handleMenuPress(item)}
                       isFocused={index === currentCardIndex}
+                      isShaking={shakingCards.has(item.id)}
+                      onPress={() => handleCardPress(item)}
+                      onLongPress={() => handleCardLongPress(item)}
+                      onDeletePress={() => handleDeleteButtonPress(item)}
                     />
                   </View>
                 )}
               />
             )}
           </View>
+
+
 
           {/* Transaction History Section */}
           <GlassCard style={styles.sectionCard}>
@@ -590,6 +786,54 @@ export default function Wallet() {
         onClose={() => setMenuVisible(false)}
         card={selectedCard}
         onAction={handleMenuAction}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={handleDeleteCancel}
+      >
+        <TouchableOpacity 
+          style={styles.modalBackdrop} 
+          activeOpacity={1} 
+          onPress={handleDeleteCancel}
+        >
+          <BlurView intensity={40} tint="light" style={styles.deleteModalContent}>
+            <View style={styles.deleteModalHeader}>
+              <AntDesign name="exclamationcircle" size={48} color="#FF3B30" />
+              <CustomText variant="title" weight="bold" fontFamily="figtree" style={styles.deleteModalTitle}>
+                Delete Punch Card
+              </CustomText>
+              <CustomText variant="body" weight="normal" fontFamily="figtree" style={styles.deleteModalText}>
+                Are you sure you want to delete "{cardToDelete?.name}"? This action cannot be undone.
+              </CustomText>
+            </View>
+            
+            <View style={styles.deleteModalButtons}>
+              <TouchableOpacity style={styles.deleteCancelButton} onPress={handleDeleteCancel}>
+                <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.deleteCancelButtonText}>
+                  Cancel
+                </CustomText>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.deleteConfirmButton} onPress={handleDeleteConfirm}>
+                <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.deleteConfirmButtonText}>
+                  Delete
+                </CustomText>
+              </TouchableOpacity>
+            </View>
+          </BlurView>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Restaurant Modal */}
+      <RestaurantModal
+        restaurant={selectedRestaurant}
+        visible={restaurantModalVisible}
+        onClose={handleRestaurantModalClose}
+        likedRestaurants={liked}
+        onLikeUpdate={toggleLike}
       />
     </View>
   );

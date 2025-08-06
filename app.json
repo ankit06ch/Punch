@@ -4,7 +4,7 @@
     "slug": "punch",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/Punch_Logos/Background_Logo/orange_bg_logo.png",
+    "icon": "./assets/icon.png",
     "scheme": "punch",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -17,6 +17,12 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Punch to use your location to show nearby restaurants and places."
         }
       ]
     ],
@@ -33,10 +39,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ankitc.punch",
-      "statusBar": {
-        "style": "dark"
-      }
+      "bundleIdentifier": "com.ankitc.punch"
     },
     "android": {
       "adaptiveIcon": {
@@ -45,13 +48,10 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.ankitc.punch",
-      "statusBar": {
-        "translucent": true,
-        "backgroundColor": "#00000000"
-      },
-      "navigationBar": {
-        "visible": "immersiveSticky",
-        "backgroundColor": "#00000000"
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAn7tCrPc4giA2bWJnscoWpDpVLuWi5w08"
+        }
       }
     },
     "web": {

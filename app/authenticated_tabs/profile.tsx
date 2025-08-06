@@ -1,12 +1,13 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, ScrollView, FlatList, Share, Animated, TextInput, Dimensions, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, ScrollView, FlatList, Share, Animated, TextInput, Dimensions, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons, Feather, AntDesign } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, query, where, orderBy, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, query, where, orderBy, onSnapshot, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import profileStyles from '../styles/profileStyles';
 import { PanResponder } from 'react-native';
+import RestaurantModal from '../../components/RestaurantModal';
 import {
   useFonts,
   Figtree_300Light,
@@ -56,6 +57,7 @@ export default function Profile() {
   });
   const [friends, setFriends] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadMessages, setUnreadMessages] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [hasSeenPunchoIntro, setHasSeenPunchoIntro] = useState(false);
   const animationValue = useRef(new Animated.Value(0)).current;
@@ -78,6 +80,11 @@ export default function Profile() {
     })
   ).current;
   const [selectedProfileTab, setSelectedProfileTab] = useState<'liked' | 'rewards'>('liked');
+  const [likedRestaurantsWithNames, setLikedRestaurantsWithNames] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
+  const [restaurantModalVisible, setRestaurantModalVisible] = useState(false);
+  const [liked, setLiked] = useState<string[]>([]);
   // Add scale animation for profile zoom-out
   const profileScale = useRef(new Animated.Value(1)).current;
   
@@ -209,6 +216,11 @@ export default function Profile() {
           }
           setHasSeenPunchoIntro(data.hasSeenPunchoIntro || false);
           
+          // Fetch restaurant names for liked restaurants
+          if (isMounted) {
+            await fetchLikedRestaurantsWithNames(data.likedRestaurants || []);
+          }
+          
           // Fetch friends (mutual following)
           if (data.followingUids && data.followerUids) {
             const mutualIds = data.followingUids.filter((id: string) => data.followerUids.includes(id));
@@ -232,6 +244,30 @@ export default function Profile() {
       }
     };
     fetchUserData();
+    
+    // Set up real-time listener for user data changes
+    const user = auth.currentUser;
+    if (user) {
+      const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (doc) => {
+        if (doc.exists() && isMounted) {
+          const data = doc.data();
+          setUserData(data);
+          if (data.privacySettings) {
+            setPrivacySettings(data.privacySettings);
+          }
+          setHasSeenPunchoIntro(data.hasSeenPunchoIntro || false);
+          
+          // Update liked restaurants when they change
+          fetchLikedRestaurantsWithNames(data.likedRestaurants || []);
+        }
+      });
+      
+      return () => { 
+        isMounted = false; 
+        unsubscribe();
+      };
+    }
+    
     return () => { isMounted = false; };
   }, []);
 
@@ -247,12 +283,155 @@ export default function Profile() {
     );
 
     const unsubscribe = onSnapshot(notificationsQuery, (snapshot) => {
-      const notificationsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      const notificationsList = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      } as any));
       setNotifications(notificationsList);
-      setUnreadCount(notificationsList.filter((n: any) => !n.read).length);
+    }, (error) => {
+      console.error('Error listening to notifications:', error);
     });
 
     return () => unsubscribe();
+  }, []);
+
+  // Listen for unread messages
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const messagesQuery = query(
+      collection(db, 'messages'),
+      where('toUserId', '==', user.uid),
+      where('read', '==', false)
+    );
+
+    const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
+      const unreadMessagesList = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      } as any));
+      setUnreadMessages(unreadMessagesList);
+    }, (error) => {
+      console.error('Error listening to unread messages:', error);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Calculate total unread count (notifications + messages)
+  useEffect(() => {
+    const unreadNotifications = notifications.filter((n: any) => 
+      (n.read === false || n.read === undefined) && 
+      n.fromUserId !== auth.currentUser?.uid // Don't count own messages
+    ).length;
+    const unreadMessagesCount = unreadMessages.filter((msg: any) => 
+      msg.fromUserId !== auth.currentUser?.uid // Don't count own messages
+    ).length;
+    
+    const totalUnread = unreadNotifications + unreadMessagesCount;
+    setUnreadCount(totalUnread);
+    
+    // Debug logging
+    console.log('Unread count update:', {
+      unreadNotifications,
+      unreadMessagesCount,
+      totalUnread,
+      notificationsCount: notifications.length,
+      messagesCount: unreadMessages.length
+    });
+  }, [notifications, unreadMessages]);
+
+  // Function to fetch restaurant names for liked restaurants
+  const fetchLikedRestaurantsWithNames = async (likedRestaurantIds: string[]) => {
+    if (likedRestaurantIds.length === 0) {
+      setLikedRestaurantsWithNames([]);
+      setLiked([]);
+      return;
+    }
+    
+    const restaurantsWithNames = [];
+    for (const restaurantId of likedRestaurantIds) {
+      try {
+        const restaurantDoc = await getDoc(doc(db, 'restaurants', restaurantId));
+        if (restaurantDoc.exists()) {
+          const restaurantData = restaurantDoc.data();
+          restaurantsWithNames.push({
+            id: restaurantId,
+            name: restaurantData.name || restaurantData.businessName || 'Unknown Restaurant',
+            cuisine: restaurantData.cuisine,
+            location: restaurantData.location,
+            description: restaurantData.description,
+            rating: restaurantData.rating,
+            priceRange: restaurantData.priceRange,
+            hours: restaurantData.hours,
+            phone: restaurantData.phone,
+            website: restaurantData.website,
+            images: restaurantData.images,
+            menu: restaurantData.menu,
+            // Include all other fields that might be in the restaurant document
+            ...restaurantData
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching restaurant:', error);
+        restaurantsWithNames.push({
+          id: restaurantId,
+          name: 'Unknown Restaurant'
+        });
+      }
+    }
+    setLikedRestaurantsWithNames(restaurantsWithNames);
+    setLiked(likedRestaurantIds);
+  };
+
+  const handleRestaurantPress = (restaurant: any) => {
+    setSelectedRestaurant(restaurant);
+    setRestaurantModalVisible(true);
+  };
+
+  const handleModalClose = () => {
+    setRestaurantModalVisible(false);
+    setSelectedRestaurant(null);
+  };
+
+  const toggleLike = async (restaurantId: string) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        const currentLiked = userDoc.data()?.likedRestaurants || [];
+        const isLiked = currentLiked.includes(restaurantId);
+        
+        if (isLiked) {
+          await updateDoc(userRef, {
+            likedRestaurants: arrayRemove(restaurantId)
+          });
+          setLiked(currentLiked.filter(id => id !== restaurantId));
+        } else {
+          await updateDoc(userRef, {
+            likedRestaurants: arrayUnion(restaurantId)
+          });
+          setLiked([...currentLiked, restaurantId]);
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+    }
+  };
+
+  // Refresh function
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetchUserData();
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
   // Create Puncho intro message for new users
@@ -262,15 +441,28 @@ export default function Profile() {
       if (!user || hasSeenPunchoIntro) return;
 
       try {
-        // Check if Puncho intro already exists
-        const existingIntro = notifications.find(n => n.type === 'puncho_intro');
-        if (existingIntro) return;
+        // Check if Puncho intro already exists in the database
+        const notificationsQuery = query(
+          collection(db, 'notifications'),
+          where('toUserId', '==', user.uid),
+          where('type', '==', 'puncho_intro')
+        );
+        const existingIntroSnapshot = await getDocs(notificationsQuery);
+        
+        if (!existingIntroSnapshot.empty) {
+          // Intro already exists, mark user as having seen it
+          await updateDoc(doc(db, 'users', user.uid), {
+            hasSeenPunchoIntro: true
+          });
+          setHasSeenPunchoIntro(true);
+          return;
+        }
 
         const introData = {
           type: 'puncho_intro',
           fromUserId: 'puncho_bot',
           toUserId: user.uid,
-          timestamp: new Date(),
+          timestamp: serverTimestamp(),
           read: false,
           message: "Hi! I'm Puncho, your Punch assistant! 👋 I'll notify you about follow requests and other important updates. Welcome to Punch! 🎉",
           senderName: 'Puncho',
@@ -288,7 +480,32 @@ export default function Profile() {
     };
 
     createPunchoIntro();
-  }, [hasSeenPunchoIntro, notifications]);
+  }, [hasSeenPunchoIntro]);
+
+  // Handle follow request acceptance notifications
+  useEffect(() => {
+    const handleFollowRequestAccepted = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      // Check for follow request acceptance notifications
+      const acceptanceNotifications = notifications.filter(n => 
+        n.type === 'follow_request_accepted' && 
+        n.toUserId === user.uid &&
+        !n.read
+      );
+
+      for (const notification of acceptanceNotifications) {
+        // Mark as read
+        await updateDoc(doc(db, 'notifications', notification.id), { read: true });
+        
+        // Refresh user data to update follower counts
+        await fetchUserData();
+      }
+    };
+
+    handleFollowRequestAccepted();
+  }, [notifications]);
 
   const handleFollowRequest = async (notificationId: string, action: 'approve' | 'deny') => {
     try {
@@ -547,10 +764,20 @@ export default function Profile() {
   // Group notifications and friends into conversations
   const getConversations = () => {
     // Puncho bot conversation
-    const punchoMessages = notifications.filter(n => n.fromUserId === 'puncho_bot' || n.type.startsWith('follow_') || n.type === 'puncho_intro' || n.type === 'puncho_reply');
+    const punchoMessages = notifications.filter(n => 
+      n.fromUserId === 'puncho_bot' || 
+      n.type.startsWith('follow_') || 
+      n.type === 'puncho_intro' || 
+      n.type === 'puncho_reply'
+    );
     const conversations = [];
     if (punchoMessages.length > 0) {
       const lastMsg = punchoMessages[0];
+      const unreadPunchoMessages = punchoMessages.filter(m => 
+        (m.read === false || m.read === undefined) && 
+        m.fromUserId !== auth.currentUser?.uid
+      );
+      
       conversations.push({
         id: 'puncho_bot',
         name: 'Puncho',
@@ -558,22 +785,29 @@ export default function Profile() {
         lastMessage: lastMsg.message,
         lastTime: lastMsg.timestamp ? new Date(lastMsg.timestamp.toDate ? lastMsg.timestamp.toDate() : lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
         messages: punchoMessages,
-        unread: punchoMessages.some(m => !m.read)
+        unread: unreadPunchoMessages.length > 0
       });
     }
-    // Friend conversations (future: real chat, for now just preview)
+    // Friend conversations
     friends.forEach(friend => {
-      // Find last message in messages collection (future: real chat)
-      // For now, just show a placeholder
+      // Check for unread messages from this friend
+      const friendUnreadMessages = unreadMessages.filter(msg => msg.fromUserId === friend.id);
+      const hasUnreadMessages = friendUnreadMessages.length > 0;
+      
+      // Get the last message from this friend (if any)
+      const lastMessage = friendUnreadMessages.length > 0 
+        ? friendUnreadMessages[0] 
+        : null;
+      
       conversations.push({
         id: friend.id,
         name: friend.name,
         username: friend.username,
         avatar: null,
-        lastMessage: 'Tap to start a conversation',
-        lastTime: '',
-        messages: [],
-        unread: false
+        lastMessage: lastMessage ? lastMessage.message : 'Tap to start a conversation',
+        lastTime: lastMessage ? new Date(lastMessage.timestamp.toDate ? lastMessage.timestamp.toDate() : lastMessage.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+        messages: friendUnreadMessages,
+        unread: hasUnreadMessages
       });
     });
     return conversations;
@@ -617,7 +851,46 @@ export default function Profile() {
   // Navigate to chat screen
   const openChat = (conversation: any) => {
     setShowMessages(false);
+    // Mark messages as read when opening chat
+    if (conversation.unread && conversation.messages.length > 0) {
+      markConversationAsRead(conversation);
+    }
     router.push(`/screens/chat?conversationId=${conversation.id}&name=${encodeURIComponent(conversation.name || conversation.username)}`);
+  };
+
+  // Mark all messages in a conversation as read
+  const markConversationAsRead = async (conversation: any) => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser || !conversation.messages.length) return;
+
+      const batch = writeBatch(db);
+      let hasUpdates = false;
+
+      conversation.messages.forEach((msg: any) => {
+        // Only mark messages as read if they're unread and not from the current user
+        if ((msg.read === false || msg.read === undefined) && msg.fromUserId !== currentUser.uid) {
+          if (conversation.id === 'puncho_bot') {
+            // For Puncho messages, update in notifications collection
+            const notificationRef = doc(db, 'notifications', msg.id);
+            batch.update(notificationRef, { read: true });
+            hasUpdates = true;
+          } else {
+            // For regular messages, update in messages collection
+            const messageRef = doc(db, 'messages', msg.id);
+            batch.update(messageRef, { read: true });
+            hasUpdates = true;
+          }
+        }
+      });
+
+      if (hasUpdates) {
+        await batch.commit();
+        console.log('Marked conversation as read:', conversation.id);
+      }
+    } catch (error) {
+      console.error('Error marking conversation as read:', error);
+    }
   };
 
   // Move the loading check AFTER all hooks
@@ -690,6 +963,41 @@ export default function Profile() {
 
   return (
     <View style={styles.container} onLayout={e => setContainerLayout(e.nativeEvent.layout)}>
+      {/* Circle Background */}
+      <View style={{
+        position: 'absolute',
+        top: -100,
+        right: -100,
+        width: 200,
+        height: 200,
+        borderRadius: 100,
+        backgroundColor: '#fb7a20',
+        opacity: 0.1,
+        zIndex: -1,
+      }} />
+      <View style={{
+        position: 'absolute',
+        top: 150,
+        left: -50,
+        width: 150,
+        height: 150,
+        borderRadius: 75,
+        backgroundColor: '#fb7a20',
+        opacity: 0.08,
+        zIndex: -1,
+      }} />
+      <View style={{
+        position: 'absolute',
+        top: 300,
+        right: -30,
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: '#fb7a20',
+        opacity: 0.06,
+        zIndex: -1,
+      }} />
+      
       {/* Top bar */}
       <View style={styles.topBar}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
@@ -717,81 +1025,148 @@ export default function Profile() {
 
       {/* Profile content with zoom-out animation */}
       <Animated.View style={[styles.profileContent, { transform: [{ scale: profileScale }] }]}> 
-        <View style={styles.avatarContainer}>
-          <View style={styles.avatarCircle}>
-            <Ionicons name="person-circle" size={90} color="#bbb" />
+        <ScrollView 
+          style={{ flex: 1, width: '100%' }}
+          contentContainerStyle={{ alignItems: 'center', paddingBottom: 120 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[ORANGE]}
+              tintColor={ORANGE}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatarCircle}>
+              <Ionicons name="person-circle" size={90} color="#bbb" />
+            </View>
           </View>
-        </View>
-        {/* Username at the top */}
-        <Text style={styles.username}>@{userData.username || 'username'}</Text>
-        <Text style={styles.name}>{userData.name || 'Your Name'}</Text>
-        
-        {/* Followers, Following, Stores Visited in order, all clickable */}
-        <View style={styles.statsContainer}>
-          <TouchableOpacity style={styles.statItem} onPress={() => router.push(`/screens/followers?userId=${userData.id || auth.currentUser?.uid}`)}>
-            <Text style={styles.statNumber}>{userData.followersCount || 0}</Text>
-            <Text style={styles.statLabel}>Followers</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.statItem} onPress={() => router.push(`/screens/following?userId=${userData.id || auth.currentUser?.uid}`)}>
-            <Text style={styles.statNumber}>{userData.followingCount || 0}</Text>
-            <Text style={styles.statLabel}>Following</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.statItem}>
-            <Text style={styles.statNumber}>{userData.storesVisitedCount || 0}</Text>
-            <Text style={styles.statLabel}>Stores Visited</Text>
-          </TouchableOpacity>
-        </View>
+          {/* Username at the top */}
+          <Text style={styles.username}>@{userData.username || 'username'}</Text>
+          <Text style={styles.bio}>{userData.bio || 'No bio yet'}</Text>
+          
+          {/* Followers, Following, Stores Visited in order, all clickable */}
+          <View style={styles.statsContainer}>
+            <TouchableOpacity style={styles.statItem} onPress={() => router.push(`/screens/followers?userId=${userData.id || auth.currentUser?.uid}`)}>
+              <Text style={styles.statNumber}>{userData.followersCount || 0}</Text>
+              <Text style={styles.statLabel}>Followers</Text>
+            </TouchableOpacity>
+            
+            {/* Separator line */}
+            <View style={styles.statSeparator} />
+            
+            <TouchableOpacity style={styles.statItem} onPress={() => router.push(`/screens/following?userId=${userData.id || auth.currentUser?.uid}`)}>
+              <Text style={styles.statNumber}>{userData.followingCount || 0}</Text>
+              <Text style={styles.statLabel}>Following</Text>
+            </TouchableOpacity>
+            
+            {/* Separator line */}
+            <View style={styles.statSeparator} />
+            
+            <TouchableOpacity style={styles.statItem}>
+              <Text style={styles.statNumber}>{userData.storesVisitedCount || 0}</Text>
+              <Text style={styles.statLabel}>Stores Visited</Text>
+            </TouchableOpacity>
+          </View>
 
-        {/* Toggle for Liked Restaurants and Rewards History - Moved higher up */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 8, marginBottom: 8 }}>
-          <TouchableOpacity
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: selectedProfileTab === 'liked' ? ORANGE : '#fff6ee',
-              borderRadius: 20,
-              paddingVertical: 8,
-              paddingHorizontal: 20,
-              marginRight: 8,
-              borderWidth: 1,
-              borderColor: ORANGE,
-            }}
-            onPress={() => setSelectedProfileTab('liked')}
-          >
-            <Ionicons name="heart" size={18} color={selectedProfileTab === 'liked' ? '#fff' : ORANGE} style={{ marginRight: 6 }} />
-            <Text style={{ color: selectedProfileTab === 'liked' ? '#fff' : ORANGE, fontWeight: 'bold' }}>Liked</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: selectedProfileTab === 'rewards' ? ORANGE : '#fff6ee',
-              borderRadius: 20,
-              paddingVertical: 8,
-              paddingHorizontal: 20,
-              marginLeft: 8,
-              borderWidth: 1,
-              borderColor: ORANGE,
-            }}
-            onPress={() => setSelectedProfileTab('rewards')}
-          >
-            <Ionicons name="gift" size={18} color={selectedProfileTab === 'rewards' ? '#fff' : ORANGE} style={{ marginRight: 6 }} />
-            <Text style={{ color: selectedProfileTab === 'rewards' ? '#fff' : ORANGE, fontWeight: 'bold' }}>Rewards</Text>
-          </TouchableOpacity>
+        {/* Toggle for Liked Restaurants and Rewards History */}
+        <View style={{ width: '100%', marginTop: 8, marginBottom: 8 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 8 }}>
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 12,
+                paddingHorizontal: 24,
+                marginRight: 32,
+                borderBottomWidth: selectedProfileTab === 'liked' ? 2 : 0,
+                borderBottomColor: ORANGE,
+              }}
+              onPress={() => setSelectedProfileTab('liked')}
+            >
+              <Ionicons name="heart" size={18} color={selectedProfileTab === 'liked' ? ORANGE : '#999'} style={{ marginRight: 6 }} />
+              <Text style={{ 
+                color: selectedProfileTab === 'liked' ? ORANGE : '#999', 
+                fontWeight: selectedProfileTab === 'liked' ? 'bold' : 'normal',
+                fontSize: 16
+              }}>Liked</Text>
+            </TouchableOpacity>
+            
+            {/* Separator */}
+            <View style={{ 
+              width: 1, 
+              height: 24, 
+              backgroundColor: '#E0E0E0', 
+              marginHorizontal: 8,
+              alignSelf: 'center'
+            }} />
+            
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 12,
+                paddingHorizontal: 24,
+                marginLeft: 32,
+                borderBottomWidth: selectedProfileTab === 'rewards' ? 2 : 0,
+                borderBottomColor: ORANGE,
+              }}
+              onPress={() => setSelectedProfileTab('rewards')}
+            >
+              <Ionicons name="gift" size={18} color={selectedProfileTab === 'rewards' ? ORANGE : '#999'} style={{ marginRight: 6 }} />
+              <Text style={{ 
+                color: selectedProfileTab === 'rewards' ? ORANGE : '#999', 
+                fontWeight: selectedProfileTab === 'rewards' ? 'bold' : 'normal',
+                fontSize: 16
+              }}>Rewards</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {/* Bottom separator line */}
+          <View style={{ 
+            height: 1, 
+            backgroundColor: '#E0E0E0', 
+            marginHorizontal: 20 
+          }} />
         </View>
         
         {/* Liked Restaurants Section */}
         {selectedProfileTab === 'liked' && (
           <View style={{ width: '100%', marginTop: 8 }}>
-            {userData.likedRestaurants && userData.likedRestaurants.length > 0 ? (
-              userData.likedRestaurants.map((restaurant: any, idx: number) => (
-                <View key={restaurant || idx} style={{ backgroundColor: '#fff6ee', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#fb7a20', flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name="restaurant" size={22} color={ORANGE} style={{ marginRight: 12 }} />
-                  <Text style={{ fontSize: 16, color: '#222', fontWeight: '600' }}>{restaurant}</Text>
-                </View>
+            {likedRestaurantsWithNames.length > 0 ? (
+              likedRestaurantsWithNames.map((restaurant: any, idx: number) => (
+                <TouchableOpacity 
+                  key={restaurant.id || idx} 
+                  style={profileStyles.likedRestaurantCard}
+                  onPress={() => handleRestaurantPress(restaurant)}
+                >
+                  <View style={profileStyles.likedRestaurantContent}>
+                    <View style={profileStyles.likedRestaurantIcon}>
+                      <AntDesign name="heart" size={20} color="#FF6B6B" />
+                    </View>
+                    <View style={profileStyles.likedRestaurantInfo}>
+                      <Text style={profileStyles.likedRestaurantName}>{restaurant.name}</Text>
+                      {restaurant.cuisine && (
+                        <Text style={profileStyles.likedRestaurantCuisine}>{restaurant.cuisine}</Text>
+                      )}
+                      {restaurant.location && (
+                        <Text style={profileStyles.likedRestaurantLocation}>{restaurant.location}</Text>
+                      )}
+                    </View>
+                    <View style={profileStyles.likedRestaurantButton}>
+                      <AntDesign name="right" size={16} color="#2C3E50" />
+                    </View>
+                  </View>
+                </TouchableOpacity>
               ))
             ) : (
-              <Text style={{ color: '#888', fontSize: 15, marginBottom: 12 }}>No liked restaurants yet.</Text>
+              <View style={profileStyles.emptyState}>
+                <AntDesign name="hearto" size={48} color="#BDC3C7" style={profileStyles.emptyIcon} />
+                <Text style={profileStyles.emptyText}>No liked restaurants yet</Text>
+                <Text style={profileStyles.emptySubtext}>Start exploring and like your favorite places</Text>
+              </View>
             )}
           </View>
         )}
@@ -814,6 +1189,7 @@ export default function Profile() {
             )}
           </View>
         )}
+        </ScrollView>
       </Animated.View>
 
       {/* Orange Search Overlay with Spilling Animation */}
@@ -1291,6 +1667,15 @@ export default function Profile() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Restaurant Modal */}
+      <RestaurantModal
+        restaurant={selectedRestaurant}
+        visible={restaurantModalVisible}
+        onClose={handleModalClose}
+        likedRestaurants={liked}
+        onLikeUpdate={toggleLike}
+      />
     </View>
   );
 }
@@ -1345,14 +1730,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statNumber: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: ORANGE,
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
     marginTop: 4,
+  },
+  bio: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 24,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  statSeparator: {
+    width: 1,
+    height: 30,
+    backgroundColor: '#E0E0E0',
+    alignSelf: 'center',
   },
   editButton: {
     backgroundColor: ORANGE,

@@ -1,6 +1,7 @@
-import { Tabs } from 'expo-router';
+import { Tabs, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { View, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity, Image } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import tabBarStyles from '../styles/tabBarStyles';
 
 export default function TabsLayout() {
@@ -31,10 +32,17 @@ export default function TabsLayout() {
           tabBarButton: ({ style, onPress }) => (
             <View style={tabBarStyles.centerButtonWrapper}>
               <TouchableOpacity
-                onPress={onPress}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  onPress();
+                }}
                 style={tabBarStyles.centerButton}
               >
-                <Ionicons name="radio" size={28} color="white" />
+                <Image 
+                  source={require('../../assets/Punch_Logos/PunchP_logo/punchPlogo.png')} 
+                  style={{ width: 32, height: 32, tintColor: 'white' }}
+                  resizeMode="contain"
+                />
               </TouchableOpacity>
             </View>
           ),
@@ -50,6 +58,12 @@ export default function TabsLayout() {
         name="profile"
         options={{
           tabBarIcon: ({ color }) => <Ionicons name="person" size={24} color={color} />, 
+        }}
+      />
+      <Tabs.Screen
+        name="full-map"
+        options={{
+          href: null, // Hide from tab bar
         }}
       />
     </Tabs>

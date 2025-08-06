@@ -3,13 +3,14 @@ import { View, FlatList, Dimensions, TouchableOpacity, StyleSheet, ActivityIndic
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, runOnJS } from 'react-native-reanimated';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import { BlurView } from 'expo-blur';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import PunchCard from '../components/PunchCard';
 import CustomText from '../../components/CustomText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AntDesign } from '@expo/vector-icons';
 import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
+import GoogleMapsView from '../components/GoogleMapsView';
 import { useRouter } from 'expo-router';
 import {
   useFonts,
@@ -26,19 +27,19 @@ const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.8;
 const CARD_HEIGHT = 180;
 
-// Orange and Navy theme colors
+// Sophisticated color palette matching wallet page
 const COLORS = {
-  primary: '#FB7A20',      // Orange
-  secondary: '#1E3A8A',    // Navy
-  accent: '#F97316',       // Darker orange
-  background: '#FFFFFF',   // White background (changed from peach)
+  primary: '#2C3E50',      // Dark blue-gray (matching wallet)
+  secondary: '#34495E',    // Medium blue-gray
+  accent: '#E74C3C',       // Red accent
+  background: '#FFFFFF',   // White background
   text: {
-    primary: '#000000',    // Black text
-    secondary: '#374151',  // Dark gray text
-    light: '#6B7280',      // Medium gray
+    primary: '#2C3E50',    // Dark blue-gray (matching wallet)
+    secondary: '#7F8C8D',  // Medium gray (matching wallet)
+    light: '#BDC3C7',      // Light gray (matching wallet)
   },
   card: {
-    primary: '#FB7A20',    // Orange cards
+    primary: '#FB7A20',    // Keep orange for cards
     secondary: '#1E3A8A',  // Navy cards
     accent: '#F97316',     // Darker orange
   }
@@ -168,6 +169,9 @@ function RewardCard({ reward }: { reward: any }) {
           <CustomText variant="body" weight="bold" fontFamily="figtree" style={styles.rewardTitle}>
             {reward.label}
           </CustomText>
+          <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.rewardRestaurant}>
+            {reward.restaurantName}
+          </CustomText>
           <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.rewardDescription}>
             {reward.description}
           </CustomText>
@@ -180,6 +184,13 @@ function RewardCard({ reward }: { reward: any }) {
         <View style={styles.progressBar}>
           <View style={[styles.progressFill, { width: `${(reward.progress / reward.required) * 100}%`, backgroundColor: reward.color }]} />
         </View>
+        {reward.isAvailable && (
+          <View style={[styles.availableBadge, { backgroundColor: reward.color }]}>
+            <CustomText variant="caption" weight="bold" fontFamily="figtree" style={styles.availableText}>
+              Available!
+            </CustomText>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -206,24 +217,28 @@ export default function Home() {
   const [lastTapped, setLastTapped] = useState<string | null>(null);
   const router = useRouter();
 
-  // Fetch user data
+  // Fetch user data with real-time listener
   useEffect(() => {
-    const fetchUserData = async () => {
-      setLoadingUser(true);
-      const user = auth.currentUser;
-      if (user) {
-        const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          setName(userData.name || '');
-          setPunches(userData.punches || 0);
-          setFavorites(userData.favorites || []);
-        }
+    const user = auth.currentUser;
+    if (!user) return;
+
+    setLoadingUser(true);
+    
+    // Set up real-time listener for user data changes
+    const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (doc) => {
+      if (doc.exists()) {
+        const userData = doc.data();
+        setName(userData.name || '');
+        setPunches(userData.punches || 0);
+        setFavorites(userData.favorites || []);
       }
       setLoadingUser(false);
-    };
-    fetchUserData();
+    }, (error) => {
+      console.error('Error listening to user data:', error);
+      setLoadingUser(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Fetch punch cards (restaurants)
@@ -251,57 +266,69 @@ export default function Home() {
       total: card.total || 10,
     }));
 
-  const rewards = [
-    { 
-      id: 'r1', 
-      label: 'Free Coffee', 
-      icon: 'coffee', 
-      color: COLORS.card.primary,
-      description: 'Any size, any flavor',
-      progress: 8,
-      required: 10
-    },
-    { 
-      id: 'r2', 
-      label: '10% Off Next Visit', 
-      icon: 'gift', 
-      color: COLORS.card.secondary,
-      description: 'Valid for 30 days',
-      progress: 5,
-      required: 8
-    },
-    { 
-      id: 'r3', 
-      label: 'Free Side Dish', 
-      icon: 'star', 
-      color: COLORS.card.accent,
-      description: 'Fries, salad, or soup',
-      progress: 12,
-      required: 15
-    },
-    { 
-      id: 'r4', 
-      label: 'Buy 1 Get 1 Free', 
-      icon: 'heart', 
-      color: COLORS.card.primary,
-      description: 'On any menu item',
-      progress: 3,
-      required: 12
-    },
-    { 
-      id: 'r5', 
-      label: 'Free Dessert', 
-      icon: 'star', 
-      color: COLORS.card.secondary,
-      description: 'Cheesecake or ice cream',
-      progress: 6,
-      required: 10
-    },
-  ];
+  // Create restaurant-specific rewards based on user's favorite restaurants
+  const rewards = favoriteCards.slice(0, 5).map((restaurant, index) => {
+    const rewardTypes = [
+      { 
+        label: 'Free Coffee', 
+        icon: 'coffee', 
+        description: 'Any size, any flavor',
+        required: 10
+      },
+      { 
+        label: '10% Off Next Visit', 
+        icon: 'gift', 
+        description: 'Valid for 30 days',
+        required: 8
+      },
+      { 
+        label: 'Free Side Dish', 
+        icon: 'star', 
+        description: 'Fries, salad, or soup',
+        required: 15
+      },
+      { 
+        label: 'Buy 1 Get 1 Free', 
+        icon: 'heart', 
+        description: 'On any menu item',
+        required: 12
+      },
+      { 
+        label: 'Free Dessert', 
+        icon: 'star', 
+        description: 'Cheesecake or ice cream',
+        required: 10
+      },
+    ];
+    
+    const rewardType = rewardTypes[index % rewardTypes.length];
+    const progress = Math.min(restaurant.punches, rewardType.required);
+    
+    return {
+      id: `r${restaurant.id}`,
+      restaurantId: restaurant.id,
+      restaurantName: restaurant.name || restaurant.businessName,
+      label: rewardType.label,
+      icon: rewardType.icon,
+      color: restaurant.color,
+      description: rewardType.description,
+      progress: progress,
+      required: rewardType.required,
+      isAvailable: progress >= rewardType.required
+    };
+  });
 
   const handleViewAllRewards = () => {
     // Navigate to wallet screen for rewards
     router.push('/authenticated_tabs/wallet');
+  };
+
+
+
+  const handleRestaurantPress = (restaurant: any) => {
+    // Handle restaurant selection from map
+    console.log('Restaurant selected:', restaurant.name);
+    // You could navigate to restaurant details or add to favorites
   };
 
   // Don't render until fonts are loaded
@@ -335,6 +362,59 @@ export default function Home() {
             </>
           )}
 
+          {/* What's Near You Section */}
+          <GlassCard style={styles.sectionCard}>
+            <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.sectionTitle}>
+              What's Near You
+            </CustomText>
+            
+            {/* Add spacing before map */}
+            <View style={{ height: 16 }} />
+            
+            {/* Map Component */}
+            <GoogleMapsView 
+              restaurants={restaurants} 
+              onRestaurantPress={handleRestaurantPress}
+            />
+          </GlassCard>
+
+          {/* Available Rewards Section */}
+          <GlassCard style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.sectionTitle}>
+                Available Rewards
+              </CustomText>
+              <TouchableOpacity style={styles.viewAllButton} onPress={handleViewAllRewards}>
+                <CustomText variant="caption" weight="medium" fontFamily="figtree" style={styles.viewAllText}>
+                  View All
+                </CustomText>
+                <AntDesign name="right" size={12} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
+            {rewards.length === 0 ? (
+              <View style={styles.emptyRewardsState}>
+                <AntDesign name="gift" size={32} color={COLORS.primary} style={styles.emptyIcon} />
+                <CustomText variant="body" weight="medium" fontFamily="figtree" style={styles.emptyText}>
+                  No rewards available yet
+                </CustomText>
+                <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.emptySubtext}>
+                  Like restaurants to see their rewards
+                </CustomText>
+              </View>
+            ) : (
+              <FlatList
+                data={rewards}
+                keyExtractor={item => item.id}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.rewardsList}
+                renderItem={({ item }) => (
+                  <RewardCard reward={item} />
+                )}
+              />
+            )}
+          </GlassCard>
+
           {/* Punch Cards Section */}
           <GlassCard style={styles.sectionCard}>
             <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.sectionTitle}>
@@ -367,31 +447,6 @@ export default function Home() {
               )}
             </View>
           </GlassCard>
-
-          {/* Available Rewards Section */}
-          <GlassCard style={styles.sectionCard}>
-            <View style={styles.sectionHeader}>
-              <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.sectionTitle}>
-                Available Rewards
-              </CustomText>
-              <TouchableOpacity style={styles.viewAllButton} onPress={handleViewAllRewards}>
-                <CustomText variant="caption" weight="medium" fontFamily="figtree" style={styles.viewAllText}>
-                  View All
-                </CustomText>
-                <AntDesign name="right" size={12} color={COLORS.primary} />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={rewards}
-              keyExtractor={item => item.id}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.rewardsList}
-              renderItem={({ item }) => (
-                <RewardCard reward={item} />
-              )}
-            />
-          </GlassCard>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -421,15 +476,15 @@ const styles = StyleSheet.create({
     marginTop: 100,
   },
   greetingText: {
-    color: COLORS.text.primary,
+    color: COLORS.primary,  // Use wallet's primary color for title
     marginBottom: 8,
   },
   punchCountText: {
-    color: COLORS.text.secondary,
+    color: COLORS.text.secondary,  // Use wallet's secondary text color
     marginBottom: 32,
   },
   punchHighlight: {
-    color: COLORS.primary,
+    color: COLORS.accent,  // Use wallet's accent color for highlights
   },
   glassCard: {
     borderRadius: 24,
@@ -454,7 +509,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    color: COLORS.primary,
+    color: COLORS.primary,  // Use wallet's primary color for section titles
   },
   viewAllButton: {
     flexDirection: 'row',
@@ -465,7 +520,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   viewAllText: {
-    color: COLORS.primary,
+    color: COLORS.primary,  // Use wallet's primary color for view all text
   },
   cardsContainer: {
     height: CARD_HEIGHT + 24,
@@ -522,6 +577,12 @@ const styles = StyleSheet.create({
   },
   rewardTitle: {
     color: COLORS.text.primary,
+    marginBottom: 2,
+  },
+  rewardRestaurant: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '600',
     marginBottom: 4,
   },
   rewardDescription: {
@@ -544,5 +605,33 @@ const styles = StyleSheet.create({
   progressFill: {
     height: '100%',
     borderRadius: 2,
+  },
+  availableBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  availableText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  emptyRewardsState: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  nearbyContainer: {
+    height: CARD_HEIGHT + 24,
+  },
+  nearbyList: {
+    paddingVertical: 8,
   },
 });

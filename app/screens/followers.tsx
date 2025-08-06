@@ -99,21 +99,64 @@ export default function FollowersScreen() {
           followersCount: (followers.find(f => f.id === targetUserId)?.followersCount || 1) - 1,
         });
       } else {
-        // Follow
-        await updateDoc(doc(db, 'users', currentUserId), {
-          followingUids: arrayUnion(targetUserId),
-          followingCount: (currentUser.followingCount || 0) + 1,
-        });
-        await updateDoc(doc(db, 'users', targetUserId), {
-          followerUids: arrayUnion(currentUserId),
-          followersCount: (followers.find(f => f.id === targetUserId)?.followersCount || 0) + 1,
-        });
+        // Check if target user has private profile
+        const targetUserDoc = await getDoc(doc(db, 'users', targetUserId));
+        const targetUserData = targetUserDoc.data();
+        
+        if (targetUserData?.privacySettings?.profileVisibility === 'private') {
+          // Send follow request
+          await sendFollowRequest(currentUserId, targetUserId);
+        } else {
+          // Public profile - auto follow
+          await updateDoc(doc(db, 'users', currentUserId), {
+            followingUids: arrayUnion(targetUserId),
+            followingCount: (currentUser.followingCount || 0) + 1,
+          });
+          await updateDoc(doc(db, 'users', targetUserId), {
+            followerUids: arrayUnion(currentUserId),
+            followersCount: (followers.find(f => f.id === targetUserId)?.followersCount || 0) + 1,
+          });
+        }
       }
       
       // Update local state
       fetchUserData();
     } catch (error) {
       console.error('Error toggling follow:', error);
+    }
+  };
+
+  const sendFollowRequest = async (fromUserId: string, toUserId: string) => {
+    try {
+      // Get current user's display name
+      const currentUserDoc = await getDoc(doc(db, 'users', fromUserId));
+      const currentUserData = currentUserDoc.data();
+      const requesterName = currentUserData?.name || currentUserData?.username || 'Someone';
+
+      // Create follow request notification
+      const notificationData = {
+        type: 'follow_request',
+        fromUserId,
+        toUserId,
+        timestamp: new Date(),
+        read: false,
+        status: 'pending',
+        message: `${requesterName} wants to be friends`,
+        requesterName: requesterName,
+      };
+
+      // Add to notifications collection
+      await addDoc(collection(db, 'notifications'), notificationData);
+      
+      // Add to user's pending requests
+      await updateDoc(doc(db, 'users', toUserId), {
+        pendingFollowRequests: arrayUnion(fromUserId)
+      });
+
+      Alert.alert('Follow Request Sent', 'Your follow request has been sent!');
+    } catch (error) {
+      console.error('Error sending follow request:', error);
+      Alert.alert('Error', 'Failed to send follow request. Please try again.');
     }
   };
 
