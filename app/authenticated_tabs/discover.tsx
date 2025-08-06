@@ -8,6 +8,7 @@ import discoverStyles from '../styles/discoverStyles';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import RestaurantModal from '../../components/RestaurantModal';
+import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
 
 const CATEGORIES = ['FOOD', 'COFFEE', 'DESSERTS', 'BEAUTY'];
 
@@ -274,6 +275,9 @@ export default function Discover() {
     <View style={{ flex: 1, backgroundColor: '#fff' }} onLayout={e => setContainerLayout(e.nativeEvent.layout)}>
       <StatusBar style="dark" backgroundColor="#fff" translucent={true} />
       
+      {/* Animated Bubbles Background */}
+      <AnimatedBubblesBackground />
+      
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 64, paddingBottom: 16 }}>
         <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#2C3E50', marginTop: 8 }}>Explore</Text>
@@ -294,7 +298,7 @@ export default function Discover() {
         <Text style={{ fontSize: 20, fontWeight: '700', color: '#2C3E50', marginLeft: 24, marginBottom: 16, marginTop: 8 }}>POPULAR <Text style={{ fontSize: 20 }}>👀</Text></Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 24, paddingBottom: 24, paddingTop: 4 }}>
           {promotions.map((item, idx) => (
-            <View key={idx} style={{ backgroundColor: '#fff', borderRadius: 20, marginRight: 24, elevation: 3, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, padding: 0, alignItems: 'center', justifyContent: 'center', minWidth: 240, height: 160 }}>
+            <View key={idx} style={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', borderRadius: 20, marginRight: 24, elevation: 3, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, padding: 0, alignItems: 'center', justifyContent: 'center', minWidth: 240, height: 160, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.4)' }}>
               <Image source={item.image} style={{ width: 240, height: 100, borderRadius: 20 }} resizeMode="cover" />
               <View style={{ padding: 16, alignItems: 'center', flex: 1, justifyContent: 'center' }}>
                 <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#2C3E50', marginBottom: 4, textAlign: 'center' }} numberOfLines={1}>{item.business}</Text>

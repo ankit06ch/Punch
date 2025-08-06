@@ -10,8 +10,8 @@ import CustomText from '../../components/CustomText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AntDesign } from '@expo/vector-icons';
 import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
-import GoogleMapsView from '../components/GoogleMapsView';
-import { useRouter } from 'expo-router';
+import GoogleMapsView, { GoogleMapsViewRef } from '../components/GoogleMapsView';
+import { useRouter, useFocusEffect } from 'expo-router';
 import {
   useFonts,
   Figtree_300Light,
@@ -216,6 +216,7 @@ export default function Home() {
   const [loadingCards, setLoadingCards] = useState(true);
   const [lastTapped, setLastTapped] = useState<string | null>(null);
   const router = useRouter();
+  const mapRef = useRef<GoogleMapsViewRef>(null);
 
   // Fetch user data with real-time listener
   useEffect(() => {
@@ -256,6 +257,20 @@ export default function Home() {
     };
     fetchRestaurants();
   }, []);
+
+  // Reset map to user location when home screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      // Small delay to ensure the map is fully loaded
+      const timer = setTimeout(() => {
+        if (mapRef.current) {
+          mapRef.current.resetToUserLocation();
+        }
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }, [])
+  );
 
   // Filter punch cards to only show user's favorites
   const favoriteCards = restaurants
@@ -373,6 +388,7 @@ export default function Home() {
             
             {/* Map Component */}
             <GoogleMapsView 
+              ref={mapRef}
               restaurants={restaurants} 
               onRestaurantPress={handleRestaurantPress}
             />
