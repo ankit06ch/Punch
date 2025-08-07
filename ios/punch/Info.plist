@@ -87,5 +87,7 @@
     <string>Automatic</string>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
+    <key>NFCReaderUsageDescription</key>
+    <string>This app uses NFC to scan tags and share information with other users.</string>
   </dict>
 </plist>

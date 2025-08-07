@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Dimensions, TouchableOpacity, TextInput, ScrollView, Text, Animated, Image, PanResponder, Alert, Keyboard } from 'react-native';
+import { View, StyleSheet, Dimensions, TouchableOpacity, TextInput, ScrollView, Text, Image, PanResponder, Alert, Keyboard, Animated as RNAnimated } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -12,6 +12,8 @@ import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove } 
 import { auth, db } from '../../firebase/config';
 import CustomText from '../../components/CustomText';
 import RestaurantModal from '../../components/RestaurantModal';
+import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 
 const { width, height } = Dimensions.get('window');
 
@@ -46,6 +48,7 @@ const COLORS = {
 export default function FullMapScreen() {
   const router = useRouter();
   const { lat, lng, name } = useLocalSearchParams();
+  const mapRef = useRef<MapView>(null);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [region, setRegion] = useState<Region>({
@@ -58,10 +61,14 @@ export default function FullMapScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Restaurant[]>([]);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const searchResultsOpacity = useRef(new Animated.Value(0)).current;
+  const searchResultsOpacity = useRef(new RNAnimated.Value(0)).current;
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [liked, setLiked] = useState<string[]>([]);
+  
+  // Animation values for location button
+  const buttonScale = useSharedValue(1);
+  const buttonRotation = useSharedValue(0);
 
   // Calculate distance between two points using Haversine formula
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): string => {
@@ -134,7 +141,7 @@ export default function FullMapScreen() {
       );
       setSearchResults(filtered);
       if (filtered.length > 0) {
-        Animated.timing(searchResultsOpacity, {
+        RNAnimated.timing(searchResultsOpacity, {
           toValue: 1,
           duration: 300,
           useNativeDriver: true,
@@ -142,7 +149,7 @@ export default function FullMapScreen() {
       }
     } else {
       setSearchResults([]);
-      Animated.timing(searchResultsOpacity, {
+      RNAnimated.timing(searchResultsOpacity, {
         toValue: 0,
         duration: 200,
         useNativeDriver: true,
@@ -190,13 +197,38 @@ export default function FullMapScreen() {
   };
 
   const getCurrentLocation = async () => {
+    // Animate button press
+    buttonScale.value = withSequence(
+      withSpring(0.9, { damping: 8 }),
+      withSpring(1, { damping: 8 })
+    );
+    
+    // Rotate the arrow icon
+    buttonRotation.value = withSequence(
+      withTiming(360, { duration: 300 }),
+      withTiming(0, { duration: 0 })
+    );
+
     try {
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
       setUserLocation(location);
+      
+      // Animate to the new region with a smooth fly-back effect
+      const newRegion = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        latitudeDelta: 0.0922,
+        longitudeDelta: 0.0421,
+      };
+      setRegion(newRegion);
+      
+      // Animate to the new region
+      mapRef.current?.animateToRegion(newRegion, 1500);
     } catch (error) {
       console.error('Error getting current location:', error);
+      Alert.alert('Error', 'Unable to get your current location. Please try again.');
     }
   };
 
@@ -217,9 +249,11 @@ export default function FullMapScreen() {
     if (liked.includes(restaurantId)) {
       await updateDoc(userRef, { likedRestaurants: arrayRemove(restaurantId) });
       newLiked = liked.filter(id => id !== restaurantId);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } else {
       await updateDoc(userRef, { likedRestaurants: arrayUnion(restaurantId) });
       newLiked = [...liked, restaurantId];
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     setLiked(newLiked);
   }
@@ -267,12 +301,21 @@ export default function FullMapScreen() {
     restaurant => restaurant.latitude && restaurant.longitude
   );
 
+  // Animated styles for location button
+  const buttonAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: buttonScale.value },
+      { rotate: `${buttonRotation.value}deg` }
+    ],
+  }));
+
   return (
     <View style={styles.container}>
       <StatusBar style="light" backgroundColor="transparent" translucent />
       
       {/* Map */}
       <MapView
+        ref={mapRef}
         style={styles.map}
         region={region}
         showsUserLocation={locationPermission}
@@ -376,15 +419,17 @@ export default function FullMapScreen() {
 
 
       {/* Location Button */}
-      <TouchableOpacity 
-        style={styles.locationButton}
-        onPress={getCurrentLocation}
-        activeOpacity={0.8}
-      >
-        <View style={styles.locationButtonBackground}>
-          <AntDesign name="arrowup" size={24} color={COLORS.primary} />
-        </View>
-      </TouchableOpacity>
+      <Animated.View style={[styles.locationButton, buttonAnimatedStyle]}>
+        <TouchableOpacity 
+          onPress={getCurrentLocation}
+          activeOpacity={0.8}
+          style={styles.locationButtonTouchable}
+        >
+          <BlurView intensity={40} tint="light" style={styles.locationButtonBackground}>
+            <AntDesign name="arrowup" size={24} color={COLORS.primary} />
+          </BlurView>
+        </TouchableOpacity>
+      </Animated.View>
 
       {/* Restaurant Modal */}
       <RestaurantModal
@@ -591,10 +636,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 120,
     right: 20,
+    zIndex: 9999,
+  },
+  locationButtonTouchable: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    overflow: 'hidden',
+  },
+  locationButtonBackground: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -604,14 +657,7 @@ const styles = StyleSheet.create({
     elevation: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.5)',
-    zIndex: 9999,
-  },
-  locationButtonBackground: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
   },
 
 }); 

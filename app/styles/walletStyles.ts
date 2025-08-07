@@ -152,6 +152,35 @@ export default StyleSheet.create({
   sectionTitle: {
     color: COLORS.primary,
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  searchButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(44, 62, 80, 0.1)',
+  },
+  searchOverlayContainer: {
+    paddingTop: 8,
+  },
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background.secondary,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(44, 62, 80, 0.1)',
+    gap: 12,
+  },
+  searchBarInput: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.text.primary,
+  },
   viewAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -233,10 +262,6 @@ export default StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     flex: 1,
-    numberOfLines: 1,
-    ellipsizeMode: 'tail',
-    adjustsFontSizeToFit: true,
-    minimumFontSize: 12,
   },
   cardChip: {
     width: 48,
@@ -311,6 +336,18 @@ export default StyleSheet.create({
     marginTop: 0,
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  punchLogoContainer: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  punchLogoImage: {
+    width: 20,
+    height: 20,
+    resizeMode: 'contain',
   },
   progressBar: {
     width: 80,
@@ -471,6 +508,7 @@ export default StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+    zIndex: 10, // Ensure it appears above filter chips
   },
   overlaySearchInput: {
     flex: 1,
@@ -557,5 +595,9 @@ export default StyleSheet.create({
   },
   deleteConfirmButtonText: {
     color: 'white',
+  },
+  // Delete mode touchable style
+  deleteModeTouchable: {
+    flex: 1,
   },
 });

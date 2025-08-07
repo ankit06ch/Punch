@@ -50,11 +50,7 @@
       "package": "com.ankitc.punch",
       "config": {
         "googleMaps": {
-<<<<<<< HEAD
-          "apiKey": "${GOOGLE_MAPS_API_KEY}"
-=======
           "apiKey": "AIzaSyAn7tCrPc4giA2bWJnscoWpDpVLuWi5w08"
->>>>>>> a9ce440ea146c9ec89a320ec55bb0aa70a6a5704
         }
       }
     },

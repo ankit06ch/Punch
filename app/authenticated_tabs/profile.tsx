@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import profileStyles from '../styles/profileStyles';
 import { PanResponder } from 'react-native';
 import RestaurantModal from '../../components/RestaurantModal';
-import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
+import * as Haptics from 'expo-haptics';
 import {
   useFonts,
   Figtree_300Light,
@@ -44,7 +44,6 @@ export default function Profile() {
   const [showHelp, setShowHelp] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [userData, setUserData] = useState<any>({});
-  const [loading, setLoading] = useState(true);
   const [searchActive, setSearchActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -241,7 +240,7 @@ export default function Profile() {
       } catch (error) {
         console.error('Error fetching user data:', error);
       } finally {
-        if (isMounted) setLoading(false);
+
       }
     };
     fetchUserData();
@@ -413,11 +412,13 @@ export default function Profile() {
             likedRestaurants: arrayRemove(restaurantId)
           });
           setLiked(currentLiked.filter(id => id !== restaurantId));
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         } else {
           await updateDoc(userRef, {
             likedRestaurants: arrayUnion(restaurantId)
           });
           setLiked([...currentLiked, restaurantId]);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         }
       }
     } catch (error) {
@@ -894,16 +895,7 @@ export default function Profile() {
     }
   };
 
-  // Move the loading check AFTER all hooks
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading...</Text>
-        </View>
-      </View>
-    );
-  }
+
 
   const renderNotification = ({ item }: { item: any }) => {
     if (item.type === 'follow_request') {
@@ -964,9 +956,6 @@ export default function Profile() {
 
   return (
     <View style={styles.container} onLayout={e => setContainerLayout(e.nativeEvent.layout)}>
-      {/* Animated Bubbles Background */}
-      <AnimatedBubblesBackground />
-      
       {/* Circle Background */}
       <View style={{
         position: 'absolute',
@@ -1767,15 +1756,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 18,
-    color: '#666',
-  },
+
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.25)',

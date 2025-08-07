@@ -8,9 +8,10 @@ import discoverStyles from '../styles/discoverStyles';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import RestaurantModal from '../../components/RestaurantModal';
-import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
+import * as Haptics from 'expo-haptics';
 
-const CATEGORIES = ['FOOD', 'COFFEE', 'DESSERTS', 'BEAUTY'];
+// Dynamic categories will be generated from restaurant data
+const DEFAULT_CATEGORIES = ['All', 'Italian', 'American', 'Mexican', 'Asian', 'Coffee', 'Desserts', 'Fast Food', 'Fine Dining', 'Casual'];
 
 export default function Discover() {
   const router = useRouter();
@@ -18,7 +19,6 @@ export default function Discover() {
   const [promotions, setPromotions] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [liked, setLiked] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('COFFEE');
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const [searchActive, setSearchActive] = useState(false);
@@ -30,6 +30,9 @@ export default function Discover() {
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
+  const [showAllRestaurants, setShowAllRestaurants] = useState(false);
+  const INITIAL_RESTAURANT_COUNT = 6; // Show only 6 restaurants initially
 
   useEffect(() => {
     fetchRestaurants();
@@ -94,7 +97,7 @@ export default function Discover() {
 
   async function fetchRestaurants() {
     const querySnapshot = await getDocs(collection(db, 'restaurants'));
-    const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
     
     // Calculate distances if user location is available
     if (userLocation) {
@@ -113,7 +116,25 @@ export default function Discover() {
     } else {
       setRestaurants(data);
     }
-    setLoading(false);
+    
+    // Generate dynamic categories from restaurant data
+    const cuisineTypes = new Set<string>();
+    data.forEach(restaurant => {
+      if (restaurant.cuisine) {
+        // Split by commas only, treat each comma-separated item as a single tag
+        const cuisineTags = restaurant.cuisine.split(',').filter((tag: string) => tag.trim().length > 0);
+        cuisineTags.forEach((tag: string) => cuisineTypes.add(tag.trim()));
+      }
+      if (restaurant.type) {
+        // Split by commas only, treat each comma-separated item as a single tag
+        const typeTags = restaurant.type.split(',').filter((tag: string) => tag.trim().length > 0);
+        typeTags.forEach((tag: string) => cuisineTypes.add(tag.trim()));
+      }
+    });
+    
+    const dynamicCategories = ['All', ...Array.from(cuisineTypes).sort()];
+    setCategories(dynamicCategories);
+    setActiveCategory('All');
   }
 
   async function fetchPromotions() {
@@ -136,24 +157,61 @@ export default function Discover() {
   }
 
   async function toggleLike(restaurantId: string) {
-    const user = auth.currentUser;
-    if (!user) return;
-    const userRef = doc(db, 'users', user.uid);
-    let newLiked;
-    if (liked.includes(restaurantId)) {
-      await updateDoc(userRef, { likedRestaurants: arrayRemove(restaurantId) });
-      newLiked = liked.filter(id => id !== restaurantId);
-    } else {
-      await updateDoc(userRef, { likedRestaurants: arrayUnion(restaurantId) });
-      newLiked = [...liked, restaurantId];
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const userRef = doc(db, 'users', user.uid);
+      let newLiked;
+      if (liked.includes(restaurantId)) {
+        await updateDoc(userRef, { likedRestaurants: arrayRemove(restaurantId) });
+        newLiked = liked.filter(id => id !== restaurantId);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } else {
+        await updateDoc(userRef, { likedRestaurants: arrayUnion(restaurantId) });
+        newLiked = [...liked, restaurantId];
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      setLiked(newLiked);
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      // Fallback: just update local state
+      let newLiked;
+      if (liked.includes(restaurantId)) {
+        newLiked = liked.filter(id => id !== restaurantId);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } else {
+        newLiked = [...liked, restaurantId];
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      setLiked(newLiked);
     }
-    setLiked(newLiked);
   }
 
   const handleRestaurantPress = (restaurant: any) => {
     // Show restaurant modal
     setSelectedRestaurant(restaurant);
     setModalVisible(true);
+  }
+
+  const handleSeeMoreToggle = () => {
+    setShowAllRestaurants(!showAllRestaurants);
+  }
+
+  const handlePromotionPress = (promotion: any) => {
+    // Find the corresponding restaurant by business name
+    const restaurant = restaurants.find(r => 
+      r.name === promotion.business || 
+      r.businessName === promotion.business ||
+      r.name?.toLowerCase().includes(promotion.business.toLowerCase()) ||
+      r.businessName?.toLowerCase().includes(promotion.business.toLowerCase())
+    );
+    
+    if (restaurant) {
+      setSelectedRestaurant(restaurant);
+      setModalVisible(true);
+    } else {
+      console.log('Restaurant not found for promotion:', promotion.business);
+    }
   }
 
   const handleCardPressIn = () => {
@@ -215,10 +273,20 @@ export default function Discover() {
     });
   };
 
-  // Filter by category (for demo, just show all)
-  const filteredRestaurants = restaurants.filter(r =>
-    r.name.toLowerCase().includes(search.toLowerCase())
-  );
+  // Filter by category and search
+  const filteredRestaurants = restaurants.filter(r => {
+    const matchesSearch = r.name.toLowerCase().includes(search.toLowerCase());
+    
+    let matchesCategory = activeCategory === 'All';
+    if (activeCategory !== 'All') {
+      const cuisineTags = r.cuisine ? r.cuisine.toLowerCase().split(',').map((tag: string) => tag.trim()) : [];
+      const typeTags = r.type ? r.type.toLowerCase().split(',').map((tag: string) => tag.trim()) : [];
+      const allTags = [...cuisineTags, ...typeTags];
+      matchesCategory = allTags.includes(activeCategory.toLowerCase());
+    }
+    
+    return matchesSearch && matchesCategory;
+  });
 
   // Search Firestore for restaurants by name as user types
   useEffect(() => {
@@ -275,9 +343,6 @@ export default function Discover() {
     <View style={{ flex: 1, backgroundColor: '#fff' }} onLayout={e => setContainerLayout(e.nativeEvent.layout)}>
       <StatusBar style="dark" backgroundColor="#fff" translucent={true} />
       
-      {/* Animated Bubbles Background */}
-      <AnimatedBubblesBackground />
-      
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 64, paddingBottom: 16 }}>
         <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#2C3E50', marginTop: 8 }}>Explore</Text>
@@ -298,22 +363,30 @@ export default function Discover() {
         <Text style={{ fontSize: 20, fontWeight: '700', color: '#2C3E50', marginLeft: 24, marginBottom: 16, marginTop: 8 }}>POPULAR <Text style={{ fontSize: 20 }}>👀</Text></Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 24, paddingBottom: 24, paddingTop: 4 }}>
           {promotions.map((item, idx) => (
-            <View key={idx} style={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', borderRadius: 20, marginRight: 24, elevation: 3, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, padding: 0, alignItems: 'center', justifyContent: 'center', minWidth: 240, height: 160, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.4)' }}>
+            <TouchableOpacity
+              key={idx}
+              onPress={() => handlePromotionPress(item)}
+              activeOpacity={0.8}
+              style={{ backgroundColor: '#fff', borderRadius: 20, marginRight: 24, elevation: 3, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, padding: 0, alignItems: 'center', justifyContent: 'center', minWidth: 240, height: 160 }}
+            >
               <Image source={item.image} style={{ width: 240, height: 100, borderRadius: 20 }} resizeMode="cover" />
               <View style={{ padding: 16, alignItems: 'center', flex: 1, justifyContent: 'center' }}>
                 <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#2C3E50', marginBottom: 4, textAlign: 'center' }} numberOfLines={1}>{item.business}</Text>
                 <Text style={{ color: '#E74C3C', fontSize: 14, textAlign: 'center' }} numberOfLines={1}>{item.promo}</Text>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
         
         {/* Categories */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 24, paddingBottom: 20, paddingTop: 8 }}>
-          {CATEGORIES.map(cat => (
+          {categories.map((cat: string) => (
             <TouchableOpacity
               key={cat}
-              onPress={() => setActiveCategory(cat)}
+              onPress={() => {
+                setActiveCategory(cat);
+                setShowAllRestaurants(false); // Reset to show limited view when category changes
+              }}
               style={{ marginRight: 24 }}
             >
               <Text style={{ fontSize: 17, fontWeight: activeCategory === cat ? 'bold' : '600', color: activeCategory === cat ? '#2C3E50' : '#7F8C8D', letterSpacing: 1, borderBottomWidth: activeCategory === cat ? 2 : 0, borderColor: '#2C3E50', paddingBottom: 4 }}>{cat}</Text>
@@ -323,7 +396,7 @@ export default function Discover() {
         
         {/* Restaurant Cards */}
         <View style={{ paddingHorizontal: 24, paddingTop: 12 }}>
-          {filteredRestaurants.map((item) => (
+          {(showAllRestaurants ? filteredRestaurants : filteredRestaurants.slice(0, INITIAL_RESTAURANT_COUNT)).map((item) => (
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.85}
@@ -356,6 +429,25 @@ export default function Discover() {
               </Animated.View>
             </TouchableOpacity>
           ))}
+          
+          {/* See More Button */}
+          {filteredRestaurants.length > INITIAL_RESTAURANT_COUNT && (
+            <TouchableOpacity
+              onPress={handleSeeMoreToggle}
+              style={styles.seeMoreButton}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.seeMoreText}>
+                {showAllRestaurants ? 'Show Less' : `See More (${filteredRestaurants.length - INITIAL_RESTAURANT_COUNT} more)`}
+              </Text>
+              <AntDesign 
+                name={showAllRestaurants ? 'up' : 'down'} 
+                size={16} 
+                color="#2C3E50" 
+                style={{ marginLeft: 8 }}
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
       
@@ -469,5 +561,23 @@ const styles = StyleSheet.create({
     marginLeft: 16,
     alignSelf: 'flex-start',
     padding: 6,
+  },
+  seeMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    marginTop: 8,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  seeMoreText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2C3E50',
   },
 });

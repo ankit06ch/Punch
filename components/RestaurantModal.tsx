@@ -5,6 +5,7 @@ import { AntDesign } from '@expo/vector-icons';
 import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import CustomText from './CustomText';
+import * as Haptics from 'expo-haptics';
 
 const { width, height } = Dimensions.get('window');
 
@@ -184,6 +185,9 @@ export default function RestaurantModal({ restaurant, visible, onClose, likedRes
       if (restaurant) {
         // Update like state in Firestore
         await onLikeUpdate(restaurant.id);
+        
+        // Add haptic feedback
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         
         // Animate heart
         heartScale.setValue(0);

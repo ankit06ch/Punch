@@ -5,6 +5,21 @@ import { BlurView } from 'expo-blur';
 import { AntDesign, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import CustomText from '../../components/CustomText';
 import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
+import CustomLoadingScreen from '../components/CustomLoadingScreen';
+
+// Import NFC manager
+let nfcManager: any = null;
+let NfcTech: any = null;
+
+if (Platform.OS === 'ios' || Platform.OS === 'android') {
+  try {
+    const nfcModule = require('react-native-nfc-manager');
+    nfcManager = nfcModule.default;
+    NfcTech = nfcModule.NfcTech;
+  } catch (error) {
+    console.log('NFC module not available:', error);
+  }
+}
 
 const { width, height } = Dimensions.get('window');
 
@@ -35,7 +50,7 @@ function GlassCard({ children, style }: { children: React.ReactNode; style?: any
   );
 }
 
-function NFCIcon({ scanning }: { scanning: boolean }) {
+function NFCIcon({ scanning, onPress }: { scanning: boolean; onPress: () => void }) {
   const pulseAnimation = useRef(new Animated.Value(1)).current;
   const rotateAnimation = useRef(new Animated.Value(0)).current;
 
@@ -84,22 +99,24 @@ function NFCIcon({ scanning }: { scanning: boolean }) {
   };
 
   return (
-    <Animated.View style={[styles.nfcIconContainer, animatedStyle]}>
-      <View style={[styles.nfcIcon, scanning && styles.nfcIconScanning]}>
-        <MaterialIcons 
-          name="nfc" 
-          size={48} 
-          color={scanning ? COLORS.primary : COLORS.text.secondary} 
-        />
-      </View>
-      {scanning && (
-        <View style={styles.scanningRings}>
-          <View style={[styles.scanningRing, styles.scanningRing1]} />
-          <View style={[styles.scanningRing, styles.scanningRing2]} />
-          <View style={[styles.scanningRing, styles.scanningRing3]} />
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
+      <Animated.View style={[styles.nfcIconContainer, animatedStyle]}>
+        <View style={[styles.nfcIcon, scanning && styles.nfcIconScanning]}>
+          <MaterialIcons 
+            name="nfc" 
+            size={48} 
+            color={scanning ? COLORS.primary : COLORS.text.secondary} 
+          />
         </View>
-      )}
-    </Animated.View>
+        {scanning && (
+          <View style={styles.scanningRings}>
+            <View style={[styles.scanningRing, styles.scanningRing1]} />
+            <View style={[styles.scanningRing, styles.scanningRing2]} />
+            <View style={[styles.scanningRing, styles.scanningRing3]} />
+          </View>
+        )}
+      </Animated.View>
+    </TouchableOpacity>
   );
 }
 
@@ -184,29 +201,104 @@ function ActionButton({
 }
 
 export default function NFC() {
+  const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [nfcSupported, setNfcSupported] = useState(false);
   const [nfcStatus, setNfcStatus] = useState('Checking NFC support...');
+  const [tagData, setTagData] = useState<any>(null);
 
   useEffect(() => {
-    // Simulate NFC check
-    setTimeout(() => {
-      setNfcSupported(false);
-      setNfcStatus('Ready to scan');
-    }, 2000);
+    checkNFCSupport();
   }, []);
 
-  const startScan = useCallback(() => {
+  const checkNFCSupport = async () => {
+    if (!nfcManager) {
+      setNfcSupported(false);
+      setNfcStatus('NFC module not available');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setNfcStatus('Checking NFC support...');
+      const supported = await nfcManager.isSupported();
+      setNfcSupported(supported);
+      
+      if (supported) {
+        setNfcStatus('Ready to scan');
+        await nfcManager.start();
+      } else {
+        setNfcStatus('NFC is not supported on this device');
+      }
+    } catch (error) {
+      console.log('NFC check error:', error);
+      setNfcSupported(false);
+      setNfcStatus('Error checking NFC support');
+    }
+    setLoading(false);
+  };
+
+  const startNFCScan = async () => {
+    if (!nfcManager || !NfcTech) {
+      Alert.alert('Error', 'NFC module not available');
+      return;
+    }
+
     setScanning(true);
+    setTagData(null);
     setNfcStatus('Scanning for NFC tag...');
-    
-    // Simulate scanning
-    setTimeout(() => {
+
+    try {
+      // For iOS, we need to handle the session differently
+      if (Platform.OS === 'ios') {
+        // iOS requires a specific approach
+        await nfcManager.requestTechnology(NfcTech.Ndef);
+      } else {
+        // Android approach
+        await nfcManager.requestTechnology(NfcTech.Ndef);
+      }
+      
+      const tag = await nfcManager.getTag();
+      setTagData(tag);
+      setNfcStatus('NFC tag detected!');
+      
+      // Try to read NDEF messages
+      try {
+        const ndefMessages = await nfcManager.getNdefMessage();
+        if (ndefMessages && ndefMessages.length > 0) {
+          const message = ndefMessages[0];
+          if (message.records && message.records.length > 0) {
+            const record = message.records[0];
+            if (record.payload) {
+              const payload = new TextDecoder().decode(record.payload);
+              Alert.alert('NFC Tag Read', `Tag ID: ${tag.id}\nPayload: ${payload}`);
+            } else {
+              Alert.alert('NFC Tag Read', `Tag ID: ${tag.id}\nNo readable data found`);
+            }
+          }
+        } else {
+          Alert.alert('NFC Tag Read', `Tag ID: ${tag.id}\nNo NDEF messages found`);
+        }
+      } catch (ndefError) {
+        Alert.alert('NFC Tag Read', `Tag ID: ${tag.id}\nCould not read NDEF data`);
+      }
+    } catch (error: any) {
+      console.log('NFC scan error:', error);
+      if (error?.toString().includes('User cancelled') || error?.toString().includes('Session invalidated')) {
+        setNfcStatus('Scan cancelled');
+      } else {
+        setNfcStatus('Scan failed - try again');
+        Alert.alert('Scan Failed', 'Unable to read NFC tag. Please try again.');
+      }
+    } finally {
       setScanning(false);
-      setNfcStatus('Scan completed - no tags found');
-      Alert.alert('Scan Complete', 'No NFC tags were detected. Please try again.');
-    }, 3000);
-  }, []);
+      try {
+        nfcManager.cancelTechnologyRequest();
+      } catch (error) {
+        console.log('Error canceling NFC request:', error);
+      }
+    }
+  };
 
   const showQRCode = () => {
     Alert.alert('QR Code', 'Your QR code would be displayed here!');
@@ -216,6 +308,8 @@ export default function NFC() {
     <View style={styles.container}>
       <AnimatedBubblesBackground />
       <SafeAreaView style={styles.safeArea}>
+        {/* Custom Loading Screen */}
+        <CustomLoadingScreen visible={loading} size="medium" />
         {/* Fixed Glass Header */}
         <View style={styles.fixedGlassHeader}>
           <BlurView intensity={20} tint="light" style={styles.glassHeader}>
@@ -233,11 +327,14 @@ export default function NFC() {
         >
           {/* NFC Icon */}
           <View style={styles.nfcSection}>
-            <NFCIcon scanning={scanning} />
+            <NFCIcon 
+              scanning={scanning} 
+              onPress={nfcSupported ? startNFCScan : showQRCode}
+            />
             
             {nfcSupported ? (
               <CustomText fontFamily="figtree" style={styles.instructionText}>
-                {scanning ? 'Hold your phone near an NFC tag...' : 'Tap the button below to start scanning'}
+                {scanning ? 'Hold your phone near an NFC tag...' : 'Tap the NFC icon to start scanning'}
               </CustomText>
             ) : (
               <CustomText fontFamily="figtree" style={styles.instructionText}>
@@ -252,6 +349,21 @@ export default function NFC() {
               {nfcStatus}
             </CustomText>
           </View>
+
+          {/* Tag Data Display */}
+          {tagData && (
+            <GlassCard style={styles.tagDataCard}>
+              <CustomText fontFamily="figtree" weight="semibold" style={styles.tagDataTitle}>
+                Last Scanned Tag
+              </CustomText>
+              <CustomText fontFamily="figtree" style={styles.tagDataText}>
+                ID: {tagData.id}
+              </CustomText>
+              <CustomText fontFamily="figtree" style={styles.tagDataText}>
+                Type: {tagData.techTypes?.join(', ') || 'Unknown'}
+              </CustomText>
+            </GlassCard>
+          )}
         </ScrollView>
 
         {/* Fixed Bottom Action Button */}
@@ -259,7 +371,7 @@ export default function NFC() {
           {nfcSupported ? (
             <ActionButton
               title={scanning ? 'Scanning...' : 'Start NFC Scan'}
-              onPress={startScan}
+              onPress={startNFCScan}
               disabled={scanning}
               icon="scan1"
               variant="primary"
@@ -467,5 +579,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  tagDataCard: {
+    marginBottom: 20,
+  },
+  tagDataTitle: {
+    fontSize: 18,
+    color: COLORS.text.primary,
+    marginBottom: 12,
+  },
+  tagDataText: {
+    fontSize: 14,
+    color: COLORS.text.secondary,
+    marginBottom: 4,
   },
 });

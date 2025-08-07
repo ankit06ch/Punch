@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Dimensions, TouchableOpacity, Alert, Platform, useColorScheme } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -6,6 +6,7 @@ import { AntDesign } from '@expo/vector-icons';
 import CustomText from '../../components/CustomText';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
+import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 
 const { width, height } = Dimensions.get('window');
 const MAP_HEIGHT = 280; // Increased from 200 to 280
@@ -25,10 +26,6 @@ interface GoogleMapsViewProps {
   fullScreen?: boolean; // New prop for full screen mode
 }
 
-export interface GoogleMapsViewRef {
-  resetToUserLocation: () => void;
-}
-
 const COLORS = {
   primary: '#FB7A20',
   secondary: '#1E3A8A',
@@ -39,7 +36,7 @@ const COLORS = {
   },
 };
 
-const GoogleMapsView = forwardRef<GoogleMapsViewRef, GoogleMapsViewProps>(({ restaurants, onRestaurantPress, fullScreen = false }, ref) => {
+export default function GoogleMapsView({ restaurants, onRestaurantPress, fullScreen = false }: GoogleMapsViewProps) {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const mapRef = useRef<MapView>(null);
@@ -51,6 +48,10 @@ const GoogleMapsView = forwardRef<GoogleMapsViewRef, GoogleMapsViewProps>(({ res
     longitudeDelta: 0.0421,
   });
   const [locationPermission, setLocationPermission] = useState<boolean>(false);
+  
+  // Animation values
+  const buttonScale = useSharedValue(1);
+  const buttonRotation = useSharedValue(0);
 
   useEffect(() => {
     requestLocationPermission();
@@ -96,23 +97,46 @@ const GoogleMapsView = forwardRef<GoogleMapsViewRef, GoogleMapsViewProps>(({ res
     }
   };
 
-  // Expose resetToUserLocation method via ref
-  useImperativeHandle(ref, () => ({
-    resetToUserLocation: () => {
-      if (userLocation && mapRef.current) {
-        const newRegion = {
-          latitude: userLocation.coords.latitude,
-          longitude: userLocation.coords.longitude,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
-        };
-        mapRef.current.animateToRegion(newRegion, 1000);
-      } else if (locationPermission) {
-        // If we don't have user location but have permission, get it
-        getCurrentLocation();
-      }
-    },
-  }));
+  const handleRecenter = async () => {
+    // Animate button press
+    buttonScale.value = withSequence(
+      withSpring(0.9, { damping: 8 }),
+      withSpring(1, { damping: 8 })
+    );
+    
+    // Rotate the arrow icon
+    buttonRotation.value = withSequence(
+      withTiming(360, { duration: 300 }),
+      withTiming(0, { duration: 0 })
+    );
+
+    if (!locationPermission) {
+      await requestLocationPermission();
+      return;
+    }
+    
+    try {
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      
+      const newRegion = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        latitudeDelta: 0.0922,
+        longitudeDelta: 0.0421,
+      };
+      
+      setUserLocation(location);
+      setRegion(newRegion);
+      
+      // Animate to the new region with a smooth fly-back effect
+      mapRef.current?.animateToRegion(newRegion, 1500);
+    } catch (error) {
+      console.error('Error recentering map:', error);
+      Alert.alert('Error', 'Unable to get your current location. Please try again.');
+    }
+  };
 
   const handleMapPress = () => {
     if (!fullScreen) {
@@ -124,6 +148,14 @@ const GoogleMapsView = forwardRef<GoogleMapsViewRef, GoogleMapsViewProps>(({ res
   const restaurantsWithLocation = restaurants.filter(
     restaurant => restaurant.latitude && restaurant.longitude
   );
+
+  // Animated styles
+  const buttonAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: buttonScale.value },
+      { rotate: `${buttonRotation.value}deg` }
+    ],
+  }));
 
   return (
     <View style={styles.container}>
@@ -169,6 +201,19 @@ const GoogleMapsView = forwardRef<GoogleMapsViewRef, GoogleMapsViewProps>(({ res
           ))}
         </MapView>
         
+        {/* Recenter Button */}
+        <Animated.View style={[styles.recenterButton, buttonAnimatedStyle]}>
+          <TouchableOpacity 
+            onPress={handleRecenter}
+            activeOpacity={0.8}
+            style={styles.recenterButtonTouchable}
+          >
+            <BlurView intensity={40} tint="light" style={styles.recenterButtonBackground}>
+              <AntDesign name="arrowup" size={20} color={COLORS.primary} />
+            </BlurView>
+          </TouchableOpacity>
+        </Animated.View>
+        
         {!fullScreen && (
           <TouchableOpacity 
             style={styles.overlay}
@@ -183,28 +228,6 @@ const GoogleMapsView = forwardRef<GoogleMapsViewRef, GoogleMapsViewProps>(({ res
                 <AntDesign name="right" size={16} color={COLORS.primary} />
               </View>
             </BlurView>
-          </TouchableOpacity>
-        )}
-        
-        {/* Location reset button */}
-        {locationPermission && !fullScreen && (
-          <TouchableOpacity 
-            style={styles.locationButton}
-            onPress={() => {
-              if (userLocation && mapRef.current) {
-                const newRegion = {
-                  latitude: userLocation.coords.latitude,
-                  longitude: userLocation.coords.longitude,
-                  latitudeDelta: 0.0922,
-                  longitudeDelta: 0.0421,
-                };
-                mapRef.current.animateToRegion(newRegion, 1000);
-              } else {
-                getCurrentLocation();
-              }
-            }}
-          >
-            <AntDesign name="arrowup" size={24} color={COLORS.primary} />
           </TouchableOpacity>
         )}
       </View>
@@ -224,7 +247,7 @@ const GoogleMapsView = forwardRef<GoogleMapsViewRef, GoogleMapsViewProps>(({ res
       )}
     </View>
   );
-});
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -240,12 +263,36 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  recenterButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 1000,
+  },
+  recenterButtonTouchable: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  recenterButtonBackground: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+    overflow: 'hidden',
+  },
   overlay: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    paddingVertical: 8,
   },
   overlayBackground: {
     flex: 1,
@@ -299,25 +346,4 @@ const styles = StyleSheet.create({
   permissionButtonText: {
     color: 'white',
   },
-  locationButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
-    zIndex: 9999,
-  },
-});
-
-export default GoogleMapsView;
+}); 

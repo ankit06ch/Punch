@@ -2,7 +2,7 @@ import { AntDesign, Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useRef, useState, useEffect } from 'react';
-import { ActivityIndicator, Animated, Easing, Image, KeyboardAvoidingView, Platform, ScrollView, TextInput, TouchableOpacity, View, Dimensions, Keyboard, KeyboardEvent } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Image, KeyboardAvoidingView, Platform, ScrollView, TextInput, TouchableOpacity, TouchableWithoutFeedback, View, Dimensions, Keyboard, KeyboardEvent } from 'react-native';
 import { BlurView } from 'expo-blur';
 
 import CustomText from '../../components/CustomText';
@@ -22,12 +22,13 @@ export default function LoginScreen() {
   const [anim] = useState(new Animated.Value(60)); // For password slide up
   const outlineAnim = useRef(new Animated.Value(0)).current; // 0 for email, 1 for phone
   const [showPassword, setShowPassword] = useState(false);
+  const [isKeyboardDismissing, setIsKeyboardDismissing] = useState(false);
   const { width } = Dimensions.get('window');
 
   const MODAL_WIDTH = width - 48;
   const MODAL_HEIGHT = 420;
   const modalAnim = useRef(new Animated.Value(MODAL_HEIGHT + 40)).current;
-  const keyboardOffset = 40;
+  const keyboardOffset = 20;
 
   useEffect(() => {
     Animated.spring(modalAnim, {
@@ -38,9 +39,10 @@ export default function LoginScreen() {
     }).start();
 
     const handleKeyboardShow = (e: KeyboardEvent) => {
+      setIsKeyboardDismissing(false);
       const keyboardHeight = e.endCoordinates.height;
       const screenHeight = Dimensions.get('window').height;
-      const maxOffset = Math.min(keyboardHeight * 0.2, 40); // More conservative offset
+      const maxOffset = Math.min(keyboardHeight * 0.1, 20); // Reduced offset
       
       Animated.timing(modalAnim, {
         toValue: -maxOffset,
@@ -50,12 +52,14 @@ export default function LoginScreen() {
       }).start();
     };
     const handleKeyboardHide = () => {
-      Animated.timing(modalAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-        easing: Easing.out(Easing.cubic),
-      }).start();
+      if (!isKeyboardDismissing) {
+        Animated.timing(modalAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.cubic),
+        }).start();
+      }
     };
     const showSub = Keyboard.addListener('keyboardDidShow', handleKeyboardShow);
     const hideSub = Keyboard.addListener('keyboardDidHide', handleKeyboardHide);
@@ -138,6 +142,15 @@ export default function LoginScreen() {
     }
   };
 
+  const dismissKeyboard = () => {
+    setIsKeyboardDismissing(true);
+    Keyboard.dismiss();
+    // Reset the flag after a short delay
+    setTimeout(() => {
+      setIsKeyboardDismissing(false);
+    }, 300);
+  };
+
   // Tab button styles
   const tabButton = (selected: boolean) => ({
     flex: 1,
@@ -154,36 +167,37 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
-      <View style={{ flex: 1, backgroundColor: '#FFF7F2' }}>
-        <AnimatedBubblesBackground />
-        {/* Back Arrow at top left */}
-        <TouchableOpacity style={[loginStyles.backButton, { position: 'absolute', top: 16, left: 16, zIndex: 20, backgroundColor: 'rgba(255,255,255,0.12)' }]} onPress={() => {
-          if (router.canGoBack && router.canGoBack()) {
-            router.back();
-          } else {
-            router.replace('../unauthenticated_tabs/onboarding');
-          }
-        }}>
-          <AntDesign name="arrowleft" size={28} color="#FB7A20" />
-        </TouchableOpacity>
-        {/* Logo above card */}
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, alignItems: 'center' }}>
-          <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={{ width: 90, height: 90, resizeMode: 'contain' }} />
-        </View>
+        <View style={{ flex: 1, backgroundColor: '#FFF7F2' }}>
+          <AnimatedBubblesBackground />
+          {/* Back Arrow at top left */}
+          <TouchableOpacity style={[loginStyles.backButton, { position: 'absolute', top: 16, left: 16, zIndex: 20, backgroundColor: 'rgba(255,255,255,0.12)' }]} onPress={() => {
+            if (router.canGoBack && router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('../unauthenticated_tabs/onboarding');
+            }
+          }}>
+            <AntDesign name="arrowleft" size={28} color="#FB7A20" />
+          </TouchableOpacity>
+          {/* Logo above card */}
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, alignItems: 'center' }}>
+            <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={{ width: 90, height: 90, resizeMode: 'contain' }} />
+          </View>
         {/* Animated modal card */}
-        <Animated.View style={{
-          position: 'absolute',
-          left: 24,
-          right: 24,
-          bottom: 40,
-          width: MODAL_WIDTH,
-          zIndex: 10,
-          minHeight: MODAL_HEIGHT,
-          backgroundColor: 'transparent',
-          justifyContent: 'flex-end',
-          alignSelf: 'center',
-          transform: [{ translateY: modalAnim }],
-        }}>
+        <TouchableWithoutFeedback onPress={dismissKeyboard}>
+          <Animated.View style={{
+            position: 'absolute',
+            left: 24,
+            right: 24,
+            bottom: 40,
+            width: MODAL_WIDTH,
+            zIndex: 10,
+            minHeight: MODAL_HEIGHT,
+            backgroundColor: 'transparent',
+            justifyContent: 'flex-end',
+            alignSelf: 'center',
+            transform: [{ translateY: modalAnim }],
+          }}>
           <BlurView
             intensity={40}
             tint="light"
@@ -386,8 +400,9 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
           </BlurView>
-        </Animated.View>
-      </View>
+          </Animated.View>
+        </TouchableWithoutFeedback>
+        </View>
     </KeyboardAvoidingView>
   );
 }

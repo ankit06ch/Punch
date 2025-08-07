@@ -19,6 +19,7 @@ import { Animated, Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
+import OnboardingImages from '../components/OnboardingImages';
 import {
   useFonts,
   Figtree_300Light,
@@ -165,9 +166,7 @@ function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext,
          }}
        />
      </View>
-      <BlurView
-        intensity={40}
-        tint="light"
+      <View
         style={{
           borderTopLeftRadius: 32,
           borderTopRightRadius: 32,
@@ -178,15 +177,15 @@ function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext,
           paddingBottom: insets.bottom,
           flex: 1,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: -8 },
-          shadowOpacity: 0.18,
-          shadowRadius: 24,
-          elevation: 18,
+          shadowOffset: { width: 0, height: -12 },
+          shadowOpacity: 0.3,
+          shadowRadius: 32,
+          elevation: 24,
           alignItems: 'center',
           justifyContent: 'space-between',
           width: MODAL_WIDTH,
           overflow: 'hidden',
-          backgroundColor: 'rgba(255,255,255,0.55)',
+          backgroundColor: '#FFFFFF',
         }}
       >
         {/* Swipeable Text Content */}
@@ -223,7 +222,7 @@ function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext,
             <AntDesign name="arrowright" size={28} color="#fff" />
           </TouchableOpacity>
         </View>
-      </BlurView>
+      </View>
     </Animated.View>
   );
 }
@@ -341,6 +340,10 @@ export default function Onboarding() {
     <View style={[onboardingStyles.container, { flex: 1, backgroundColor: '#FFF7F2' }]}>
       <StatusBar style="dark" translucent backgroundColor="transparent" />
       <AnimatedBubblesBackground />
+      <OnboardingImages 
+        currentIndex={currentIndex}
+        isVisible={showModal}
+      />
       {showModal && (
         <OnboardingModal
           currentIndex={currentIndex}

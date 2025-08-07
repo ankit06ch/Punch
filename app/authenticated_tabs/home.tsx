@@ -3,15 +3,20 @@ import { View, FlatList, Dimensions, TouchableOpacity, StyleSheet, ActivityIndic
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, runOnJS } from 'react-native-reanimated';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import { BlurView } from 'expo-blur';
-import { collection, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import PunchCard from '../components/PunchCard';
+import StackedPunchCards from '../components/StackedPunchCards';
 import CustomText from '../../components/CustomText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AntDesign } from '@expo/vector-icons';
 import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
-import GoogleMapsView, { GoogleMapsViewRef } from '../components/GoogleMapsView';
-import { useRouter, useFocusEffect } from 'expo-router';
+import GoogleMapsView from '../components/GoogleMapsView';
+import RestaurantModal from '../../components/RestaurantModal';
+import EnhancedRewardCard from '../components/EnhancedRewardCard';
+import GiftBoxReward from '../components/GiftBoxReward';
+import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import {
   useFonts,
   Figtree_300Light,
@@ -39,23 +44,22 @@ const COLORS = {
     light: '#BDC3C7',      // Light gray (matching wallet)
   },
   card: {
-    primary: '#FB7A20',    // Keep orange for cards
-    secondary: '#1E3A8A',  // Navy cards
-    accent: '#F97316',     // Darker orange
+    primary: '#2C3E50',    // Dark blue-gray (matching wallet)
+    secondary: '#34495E',  // Medium blue-gray (matching wallet)
+    accent: '#E74C3C',     // Red (matching wallet)
+    success: '#27AE60',    // Green (matching wallet)
+    warning: '#F39C12',    // Orange (matching wallet)
+    info: '#3498DB',       // Blue (matching wallet)
   }
 };
 
 const CARD_COLORS = [
-  COLORS.card.primary,     // Orange
-  COLORS.card.secondary,   // Navy
-  COLORS.card.accent,      // Darker orange
-  '#2EC4B6',              // Teal
-  '#FFB703',              // Yellow
-  '#A259FF',              // Purple
-  '#FF6F61',              // Coral
-  '#43B0FF',              // Blue
-  '#FFD166',              // Gold
-  '#06D6A0',              // Mint
+  COLORS.card.primary,    // Dark blue-gray
+  COLORS.card.secondary,  // Medium blue-gray
+  COLORS.card.accent,     // Red
+  COLORS.card.success,    // Green
+  COLORS.card.warning,    // Orange
+  COLORS.card.info,       // Blue
 ];
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
@@ -158,43 +162,7 @@ function GlassCard({ children, style }: { children: React.ReactNode; style?: any
   );
 }
 
-function RewardCard({ reward }: { reward: any }) {
-  return (
-    <View style={styles.rewardCard}>
-      <View style={styles.rewardHeader}>
-        <View style={[styles.rewardIcon, { backgroundColor: reward.color }]}>
-          <AntDesign name={reward.icon} size={20} color="white" />
-        </View>
-        <View style={styles.rewardInfo}>
-          <CustomText variant="body" weight="bold" fontFamily="figtree" style={styles.rewardTitle}>
-            {reward.label}
-          </CustomText>
-          <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.rewardRestaurant}>
-            {reward.restaurantName}
-          </CustomText>
-          <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.rewardDescription}>
-            {reward.description}
-          </CustomText>
-        </View>
-      </View>
-      <View style={styles.rewardFooter}>
-        <CustomText variant="caption" weight="medium" fontFamily="figtree" style={styles.rewardProgress}>
-          {reward.progress} / {reward.required} punches
-        </CustomText>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${(reward.progress / reward.required) * 100}%`, backgroundColor: reward.color }]} />
-        </View>
-        {reward.isAvailable && (
-          <View style={[styles.availableBadge, { backgroundColor: reward.color }]}>
-            <CustomText variant="caption" weight="bold" fontFamily="figtree" style={styles.availableText}>
-              Available!
-            </CustomText>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-}
+
 
 export default function Home() {
   // Load Figtree fonts
@@ -215,8 +183,12 @@ export default function Home() {
   const [restaurants, setRestaurants] = useState<any[]>([]);
   const [loadingCards, setLoadingCards] = useState(true);
   const [lastTapped, setLastTapped] = useState<string | null>(null);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [liked, setLiked] = useState<string[]>([]);
+  const [giftBoxVisible, setGiftBoxVisible] = useState(false);
+  const [selectedReward, setSelectedReward] = useState<any>(null);
   const router = useRouter();
-  const mapRef = useRef<GoogleMapsViewRef>(null);
 
   // Fetch user data with real-time listener
   useEffect(() => {
@@ -258,28 +230,48 @@ export default function Home() {
     fetchRestaurants();
   }, []);
 
-  // Reset map to user location when home screen is focused
-  useFocusEffect(
-    React.useCallback(() => {
-      // Small delay to ensure the map is fully loaded
-      const timer = setTimeout(() => {
-        if (mapRef.current) {
-          mapRef.current.resetToUserLocation();
-        }
-      }, 500);
-      
-      return () => clearTimeout(timer);
-    }, [])
-  );
+  // Fetch liked restaurants
+  useEffect(() => {
+    const fetchLiked = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (userDoc.exists()) {
+        setLiked(userDoc.data()?.likedRestaurants || []);
+      }
+    };
+    fetchLiked();
+  }, []);
 
-  // Filter punch cards to only show user's favorites
-  const favoriteCards = restaurants
-    .filter(r => favorites.includes(r.name || r.businessName))
+  // Filter punch cards to only show user's favorites that have punch cards
+  let favoriteCards = restaurants
+    .filter(r => {
+      const restaurantName = r.name || r.businessName;
+      const isFavorite = favorites.includes(restaurantName) || 
+                        favorites.includes(r.id) ||
+                        favorites.some(fav => typeof fav === 'object' && fav.id === r.id);
+      return isFavorite;
+    })
     .map(card => ({
       ...card,
       punches: Math.floor(Math.random() * ((card.total || 10) - 1 + 1)) + 1,
       total: card.total || 10,
+    }))
+    .filter(card => card.punches > 0); // Only show cards that have punches
+
+  // If no favorite cards, show some sample cards for demonstration
+  if (favoriteCards.length === 0 && restaurants.length > 0) {
+    favoriteCards = restaurants.slice(0, 4).map(card => ({
+      ...card,
+      punches: Math.floor(Math.random() * ((card.total || 10) - 1 + 1)) + 1,
+      total: card.total || 10,
     }));
+  }
+
+  // Debug logging
+  console.log('Favorites array:', favorites);
+  console.log('Restaurants count:', restaurants.length);
+  console.log('Favorite cards count:', favoriteCards.length);
 
   // Create restaurant-specific rewards based on user's favorite restaurants
   const rewards = favoriteCards.slice(0, 5).map((restaurant, index) => {
@@ -317,7 +309,8 @@ export default function Home() {
     ];
     
     const rewardType = rewardTypes[index % rewardTypes.length];
-    const progress = Math.min(restaurant.punches, rewardType.required);
+    // For testing: ensure some rewards are available
+    const testProgress = index === 0 ? rewardType.required : Math.min(restaurant.punches, rewardType.required);
     
     return {
       id: `r${restaurant.id}`,
@@ -327,10 +320,22 @@ export default function Home() {
       icon: rewardType.icon,
       color: restaurant.color,
       description: rewardType.description,
-      progress: progress,
+      progress: testProgress,
       required: rewardType.required,
-      isAvailable: progress >= rewardType.required
+      isAvailable: testProgress >= rewardType.required
     };
+  });
+
+  // Sort rewards: available first, then by progress (descending)
+  const sortedRewards = rewards.sort((a, b) => {
+    // First, sort by availability (available rewards first)
+    if (a.isAvailable && !b.isAvailable) return -1;
+    if (!a.isAvailable && b.isAvailable) return 1;
+    
+    // If both are available or both are not available, sort by progress percentage
+    const aProgress = (a.progress / a.required) * 100;
+    const bProgress = (b.progress / b.required) * 100;
+    return bProgress - aProgress; // Descending order
   });
 
   const handleViewAllRewards = () => {
@@ -338,12 +343,57 @@ export default function Home() {
     router.push('/authenticated_tabs/wallet');
   };
 
+  const handleRewardClaim = (reward: any) => {
+    setSelectedReward(reward);
+    setGiftBoxVisible(true);
+  };
+
+  const handleRewardClaimed = () => {
+    // Here you would typically update the database to mark the reward as claimed
+    // and reset the punch count for that restaurant
+    console.log('Reward claimed:', selectedReward);
+    // You could add logic here to update the user's claimed rewards in the database
+  };
+
+
+
 
 
   const handleRestaurantPress = (restaurant: any) => {
-    // Handle restaurant selection from map
-    console.log('Restaurant selected:', restaurant.name);
-    // You could navigate to restaurant details or add to favorites
+    // Show restaurant modal
+    setSelectedRestaurant(restaurant);
+    setModalVisible(true);
+  };
+
+  const toggleLike = async (restaurantId: string) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const userRef = doc(db, 'users', user.uid);
+      let newLiked;
+      if (liked.includes(restaurantId)) {
+        await updateDoc(userRef, { likedRestaurants: arrayRemove(restaurantId) });
+        newLiked = liked.filter(id => id !== restaurantId);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } else {
+        await updateDoc(userRef, { likedRestaurants: arrayUnion(restaurantId) });
+        newLiked = [...liked, restaurantId];
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      setLiked(newLiked);
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      // Fallback: just update local state
+      let newLiked;
+      if (liked.includes(restaurantId)) {
+        newLiked = liked.filter(id => id !== restaurantId);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } else {
+        newLiked = [...liked, restaurantId];
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      setLiked(newLiked);
+    }
   };
 
   // Don't render until fonts are loaded
@@ -388,7 +438,6 @@ export default function Home() {
             
             {/* Map Component */}
             <GoogleMapsView 
-              ref={mapRef}
               restaurants={restaurants} 
               onRestaurantPress={handleRestaurantPress}
             />
@@ -407,7 +456,7 @@ export default function Home() {
                 <AntDesign name="right" size={12} color={COLORS.primary} />
               </TouchableOpacity>
             </View>
-            {rewards.length === 0 ? (
+            {sortedRewards.length === 0 ? (
               <View style={styles.emptyRewardsState}>
                 <AntDesign name="gift" size={32} color={COLORS.primary} style={styles.emptyIcon} />
                 <CustomText variant="body" weight="medium" fontFamily="figtree" style={styles.emptyText}>
@@ -419,13 +468,19 @@ export default function Home() {
               </View>
             ) : (
               <FlatList
-                data={rewards}
+                data={sortedRewards.slice(0, 5)}
                 keyExtractor={item => item.id}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.rewardsList}
                 renderItem={({ item }) => (
-                  <RewardCard reward={item} />
+                  <EnhancedRewardCard
+                    reward={item}
+                    onClaim={handleRewardClaim}
+                    isAvailable={item.isAvailable}
+                    progress={item.progress}
+                    required={item.required}
+                  />
                 )}
               />
             )}
@@ -434,12 +489,15 @@ export default function Home() {
           {/* Punch Cards Section */}
           <GlassCard style={styles.sectionCard}>
             <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.sectionTitle}>
-              Your Punch Cards
+              Your Favorite Punch Cards
             </CustomText>
-            <View style={styles.cardsContainer}>
-              {loadingCards ? (
+            <View style={{ height: 24 }} />
+            {loadingCards ? (
+              <View style={styles.cardsContainer}>
                 <ActivityIndicator size="small" color={COLORS.primary} />
-              ) : favoriteCards.length === 0 ? (
+              </View>
+            ) : favoriteCards.length === 0 ? (
+              <View style={styles.cardsContainer}>
                 <View style={styles.emptyState}>
                   <AntDesign name="star" size={32} color={COLORS.primary} style={styles.emptyIcon} />
                   <CustomText variant="body" weight="medium" fontFamily="figtree" style={styles.emptyText}>
@@ -449,22 +507,41 @@ export default function Home() {
                     Like a restaurant to see it here
                   </CustomText>
                 </View>
-              ) : (
-                <FlatList
-                  data={favoriteCards}
-                  keyExtractor={item => item.id}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.cardsList}
-                  renderItem={({ item }) => (
-                    <AnimatedCard card={item} onPress={() => setLastTapped(item.id)} />
-                  )}
+              </View>
+            ) : (
+              <View style={[styles.cardsContainer, { minHeight: 360 }]}>
+                <StackedPunchCards
+                  cards={favoriteCards}
+                  onCardPress={(card) => setLastTapped(card.id)}
                 />
-              )}
-            </View>
+              </View>
+            )}
           </GlassCard>
         </ScrollView>
       </SafeAreaView>
+      
+      {/* Restaurant Modal */}
+      <RestaurantModal
+        restaurant={selectedRestaurant}
+        visible={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setSelectedRestaurant(null);
+        }}
+        likedRestaurants={liked}
+        onLikeUpdate={toggleLike}
+      />
+
+      {/* Gift Box Reward Modal */}
+      <GiftBoxReward
+        visible={giftBoxVisible}
+        reward={selectedReward}
+        onClose={() => {
+          setGiftBoxVisible(false);
+          setSelectedReward(null);
+        }}
+        onClaim={handleRewardClaimed}
+      />
     </View>
   );
 }
@@ -524,6 +601,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  testButton: {
+    backgroundColor: '#FF6B6B',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  testButtonText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '600',
+  },
   sectionTitle: {
     color: COLORS.primary,  // Use wallet's primary color for section titles
   },
@@ -539,7 +632,8 @@ const styles = StyleSheet.create({
     color: COLORS.primary,  // Use wallet's primary color for view all text
   },
   cardsContainer: {
-    height: CARD_HEIGHT + 24,
+    minHeight: 280, // Minimum height for the cards section
+    alignItems: 'center',
   },
   cardsList: {
     paddingVertical: 8,
@@ -562,83 +656,6 @@ const styles = StyleSheet.create({
   },
   rewardsList: {
     paddingVertical: 8,
-  },
-  rewardCard: {
-    width: 200,
-    marginRight: 16,
-    borderRadius: 16,
-    padding: 16,
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  rewardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  rewardIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  rewardInfo: {
-    flex: 1,
-  },
-  rewardTitle: {
-    color: COLORS.text.primary,
-    marginBottom: 2,
-  },
-  rewardRestaurant: {
-    color: COLORS.primary,
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  rewardDescription: {
-    color: COLORS.text.secondary,
-    lineHeight: 16,
-  },
-  rewardFooter: {
-    marginTop: 8,
-  },
-  rewardProgress: {
-    color: COLORS.text.secondary,
-    marginBottom: 6,
-  },
-  progressBar: {
-    height: 4,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  availableBadge: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  availableText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
   },
   emptyRewardsState: {
     alignItems: 'center',
