@@ -9,6 +9,7 @@ import profileStyles from '../styles/profileStyles';
 import { PanResponder } from 'react-native';
 import RestaurantModal from '../../components/RestaurantModal';
 import * as Haptics from 'expo-haptics';
+import { pickProfilePicture, uploadProfilePicture } from '../../utils/profilePictureUtils';
 import {
   useFonts,
   Figtree_300Light,
@@ -100,6 +101,7 @@ export default function Profile() {
     phone: ''
   });
   const [savingProfile, setSavingProfile] = useState(false);
+  const [uploadingProfilePicture, setUploadingProfilePicture] = useState(false);
 
   // PanResponder for hamburger menu modal
   const menuModalPanResponder = useRef(
@@ -739,6 +741,40 @@ export default function Profile() {
     // Handle gesture events if needed
   };
 
+  // Profile Picture Functions
+  const handleProfilePictureChange = async () => {
+    try {
+      setUploadingProfilePicture(true);
+      const result = await pickProfilePicture();
+      if (result) {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const profilePictureUrl = await uploadProfilePicture(user.uid, result.uri);
+        if (profilePictureUrl) {
+          await updateDoc(doc(db, 'users', user.uid), {
+            profilePictureUrl: profilePictureUrl
+          });
+          
+          // Update local state
+          setUserData((prev: any) => ({
+            ...prev,
+            profilePictureUrl: profilePictureUrl
+          }));
+          
+          Alert.alert('Success', 'Profile picture updated successfully!');
+        } else {
+          Alert.alert('Error', 'Failed to upload profile picture. Please try again.');
+        }
+      }
+    } catch (error) {
+      console.error('Error updating profile picture:', error);
+      Alert.alert('Error', 'Failed to update profile picture. Please try again.');
+    } finally {
+      setUploadingProfilePicture(false);
+    }
+  };
+
   // Edit Profile Functions
   const openEditProfile = () => {
     setEditProfileData({
@@ -1065,9 +1101,32 @@ export default function Profile() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.avatarContainer}>
-            <View style={styles.avatarCircle}>
-              <Ionicons name="person-circle" size={90} color="#bbb" />
-            </View>
+            <TouchableOpacity 
+              style={styles.avatarCircle} 
+              onPress={handleProfilePictureChange}
+              disabled={uploadingProfilePicture}
+            >
+              {userData.profilePictureUrl ? (
+                <Image 
+                  source={{ uri: userData.profilePictureUrl }} 
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <Ionicons name="person-circle" size={90} color="#bbb" />
+              )}
+              {uploadingProfilePicture && (
+                <View style={styles.avatarOverlay}>
+                  <ActivityIndicator size="small" color="#fff" />
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.editAvatarButton}
+              onPress={handleProfilePictureChange}
+              disabled={uploadingProfilePicture}
+            >
+              <Ionicons name="camera" size={16} color="#fff" />
+            </TouchableOpacity>
           </View>
           {/* Username at the top */}
           <Text style={styles.username}>@{userData.username || 'username'}</Text>
@@ -1734,6 +1793,36 @@ const styles = StyleSheet.create({
     backgroundColor: '#eee',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  avatarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 50,
+  },
+  editAvatarButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: ORANGE,
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   username: {
     fontSize: 24,
@@ -2180,5 +2269,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
   },
 });

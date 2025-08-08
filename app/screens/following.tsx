@@ -239,7 +239,11 @@ export default function FollowingScreen() {
     >
       <View style={styles.userInfo}>
         <View style={styles.avatarContainer}>
-          <Ionicons name="person-circle" size={50} color="#bbb" />
+          {item.profilePictureUrl ? (
+            <Image source={{ uri: item.profilePictureUrl }} style={styles.avatarImage} />
+          ) : (
+            <Ionicons name="person-circle" size={50} color="#bbb" />
+          )}
         </View>
         <View style={styles.userDetails}>
           <Text style={styles.userName}>{item.name || 'Unknown User'}</Text>
@@ -450,6 +454,11 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     marginRight: 12,
+  },
+  avatarImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
   userDetails: {
     flex: 1,

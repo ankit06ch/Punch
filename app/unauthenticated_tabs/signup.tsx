@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Animated, Easing, Keyboard, TouchableWithoutFeedback, Switch, KeyboardAvoidingView, Platform, Linking, Dimensions, LogBox } from 'react-native';
+import { View, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Animated, Easing, Keyboard, TouchableWithoutFeedback, Switch, KeyboardAvoidingView, Platform, Linking, Dimensions, LogBox, Alert } from 'react-native';
 // Custom Checkbox
 function CustomCheckbox({ value, onValueChange }: { value: boolean; onValueChange: (v: boolean) => void }) {
   return (
@@ -34,6 +34,7 @@ import onboardingStyles from '../styles/onboardingStyles';
 import Svg, { Path, Circle, G } from 'react-native-svg';
 import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
 import { KeyboardEvent } from 'react-native';
+import { pickProfilePicture, uploadProfilePicture } from '../../utils/profilePictureUtils';
 
 const { width } = Dimensions.get('window');
 const MODAL_WIDTH = width - 48;
@@ -123,6 +124,12 @@ const steps = [
     validate: (val: string) => val.trim().length > 1 || 'Please enter your name.',
   },
   {
+    key: 'profilePicture',
+    prompt: "Add a profile picture (optional)",
+    icon: 'camera',
+    validate: () => true, // Always valid since it's optional
+  },
+  {
     key: 'contact',
     prompt: "How can we reach you?",
     icon: 'mail',
@@ -201,6 +208,8 @@ export default function SignupScreen() {
   const [agree, setAgree] = useState(false);
   const [notifEmail, setNotifEmail] = useState(true);
   const [notifText, setNotifText] = useState(false);
+  const [profilePicture, setProfilePicture] = useState<string | null>(null);
+  const [uploadingPicture, setUploadingPicture] = useState(false);
   // Remove modalVisible state and logic
   // Remove the setTimeout for modalVisible in useEffect
   // Always render the modal when SignupScreen is mounted
@@ -277,10 +286,34 @@ export default function SignupScreen() {
     </View>
   );
 
+  const handleProfilePicturePick = async () => {
+    try {
+      setUploadingPicture(true);
+      const result = await pickProfilePicture();
+      if (result) {
+        setProfilePicture(result.uri);
+      }
+    } catch (error) {
+      console.error('Error picking profile picture:', error);
+      Alert.alert('Error', 'Failed to pick profile picture. Please try again.');
+    } finally {
+      setUploadingPicture(false);
+    }
+  };
+
   const handleNext = async () => {
     setError('');
     const current = steps[step];
     const value = form[current.key as keyof typeof form];
+    
+    if (current.key === 'profilePicture') {
+      // Profile picture step is optional, always proceed
+      if (step < steps.length - 1) {
+        setStep(step + 1);
+      }
+      return;
+    }
+    
     if (current.key === 'contact') {
       if (typeof current.validate === 'function') {
         const valid = current.validate('', form);
@@ -329,11 +362,23 @@ export default function SignupScreen() {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, form.email, form.password);
       const user = userCredential.user;
+      
+      // Upload profile picture if selected
+      let profilePictureUrl = '';
+      if (profilePicture) {
+        try {
+          profilePictureUrl = await uploadProfilePicture(user.uid, profilePicture) || '';
+        } catch (error) {
+          console.error('Error uploading profile picture:', error);
+          // Continue with signup even if profile picture upload fails
+        }
+      }
+      
       await setDoc(doc(db, 'users', user.uid), {
         uid: user.uid,
         name: form.name,
         bio: '', // Removed bio
-        profilePictureUrl: '',
+        profilePictureUrl: profilePictureUrl,
         storesVisitedCount: 0,
         storesVisitedHistory: [],
         rewardsRedeemed: [],
@@ -431,6 +476,38 @@ export default function SignupScreen() {
                       onSubmitEditing={handleNext}
                       returnKeyType="next"
                     />
+                  </View>
+                )}
+                
+                {/* Profile Picture step */}
+                {current.key === 'profilePicture' && (
+                  <View style={styles.profilePictureContainer}>
+                    <TouchableOpacity 
+                      style={styles.profilePictureButton} 
+                      onPress={handleProfilePicturePick}
+                      disabled={uploadingPicture}
+                    >
+                      {profilePicture ? (
+                        <Image source={{ uri: profilePicture }} style={styles.profilePicture} />
+                      ) : (
+                        <View style={styles.profilePicturePlaceholder}>
+                          <AntDesign name="camera" size={32} color="#FB7A20" />
+                          <CustomText fontFamily="figtree" style={styles.profilePictureText}>
+                            {uploadingPicture ? 'Uploading...' : 'Tap to add photo'}
+                          </CustomText>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                    {profilePicture && (
+                      <TouchableOpacity 
+                        style={styles.removePictureButton}
+                        onPress={() => setProfilePicture(null)}
+                      >
+                        <CustomText fontFamily="figtree" style={styles.removePictureText}>
+                          Remove
+                        </CustomText>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 )}
                 {/* Password step: show password input */}
@@ -561,6 +638,24 @@ export default function SignupScreen() {
                       style={[styles.nextButton, (loading || !(form.name && form.name.trim().length > 1)) && styles.nextButtonDisabled]}
                       onPress={handleNext}
                       disabled={loading || !(form.name && form.name.trim().length > 1)}
+                    >
+                      <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.nextButtonText}>
+                        Next
+                      </CustomText>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                
+                {/* On the profile picture step, show Back and Next */}
+                {current.key === 'profilePicture' && (
+                  <View style={styles.buttonRow}>
+                    <TouchableOpacity style={styles.secondaryButton} onPress={handleBack} disabled={loading}>
+                      <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.secondaryButtonText}>Back</CustomText>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.nextButton}
+                      onPress={handleNext}
+                      disabled={loading}
                     >
                       <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.nextButtonText}>
                         Next
@@ -848,5 +943,47 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 8,
     marginBottom: 8,
     overflow: 'hidden',
+  },
+  profilePictureContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  profilePictureButton: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FB7A20',
+    borderStyle: 'dashed',
+    marginBottom: 12,
+  },
+  profilePicture: {
+    width: 116,
+    height: 116,
+    borderRadius: 58,
+  },
+  profilePicturePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profilePictureText: {
+    color: '#FB7A20',
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  removePictureButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 8,
+  },
+  removePictureText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
