@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Image, ActivityIndicator, Keyboard, Modal, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, getDocs, query, where, deleteDoc, addDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
@@ -22,6 +22,8 @@ export default function FollowersScreen() {
   const searchInputRef = React.useRef<TextInput>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [showPrivacySettings, setShowPrivacySettings] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   useEffect(() => {
     fetchUserData();
@@ -69,10 +71,23 @@ export default function FollowersScreen() {
   const fetchFollowing = async (followingUids: string[]) => {
     try {
       const followingData = [];
+      const pendingRequests = currentUser?.pendingFollowRequests || [];
+      
       for (const uid of followingUids) {
         const userDoc = await getDoc(doc(db, 'users', uid));
         if (userDoc.exists()) {
-          followingData.push({ id: uid, ...userDoc.data() });
+          const userData = userDoc.data();
+          const isPendingRequest = pendingRequests.includes(uid);
+          
+          // Only include users that are actually following (not pending requests)
+          // unless the current user is viewing their own following list
+          if (!isPendingRequest || auth.currentUser?.uid === userId) {
+            followingData.push({ 
+              id: uid, 
+              ...userData,
+              isPendingRequest 
+            });
+          }
         }
       }
       setFollowing(followingData);
@@ -87,8 +102,36 @@ export default function FollowersScreen() {
     try {
       const currentUserId = auth.currentUser.uid;
       const isFollowing = currentUser?.followingUids?.includes(targetUserId);
+      const isPendingRequest = currentUser?.pendingFollowRequests?.includes(targetUserId);
       
-      if (isFollowing) {
+      if (isPendingRequest) {
+        // Cancel follow request
+        await updateDoc(doc(db, 'users', targetUserId), {
+          pendingFollowRequests: arrayRemove(currentUserId)
+        });
+        
+        // Remove from followingUids if it was added
+        await updateDoc(doc(db, 'users', currentUserId), {
+          followingUids: arrayRemove(targetUserId),
+          pendingFollowRequests: arrayRemove(targetUserId)
+        });
+        
+        // Delete the follow request notification
+        const notificationsQuery = query(
+          collection(db, 'notifications'),
+          where('type', '==', 'follow_request'),
+          where('fromUserId', '==', currentUserId),
+          where('toUserId', '==', targetUserId),
+          where('status', '==', 'pending')
+        );
+        const notificationSnapshot = await getDocs(notificationsQuery);
+        
+        // Delete all matching notifications (should be only one)
+        const deletePromises = notificationSnapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deletePromises);
+        
+        Alert.alert('Request Cancelled', 'Your follow request has been cancelled.');
+      } else if (isFollowing) {
         // Unfollow
         await updateDoc(doc(db, 'users', currentUserId), {
           followingUids: arrayRemove(targetUserId),
@@ -165,7 +208,9 @@ export default function FollowersScreen() {
     
     const isFollowing = currentUser.followingUids?.includes(targetUserId);
     const isFollowedBy = currentUser.followerUids?.includes(targetUserId);
+    const isPendingRequest = currentUser.pendingFollowRequests?.includes(targetUserId);
     
+    if (isPendingRequest) return 'Request Sent';
     if (isFollowing && isFollowedBy) return 'Friends';
     if (isFollowing) return 'Following';
     if (isFollowedBy) return 'Follow Back';
@@ -177,7 +222,9 @@ export default function FollowersScreen() {
     
     const isFollowing = currentUser.followingUids?.includes(targetUserId);
     const isFollowedBy = currentUser.followerUids?.includes(targetUserId);
+    const isPendingRequest = currentUser.pendingFollowRequests?.includes(targetUserId);
     
+    if (isPendingRequest) return styles.pendingRequestButton;
     if (isFollowing && isFollowedBy) return styles.friendsButton;
     if (isFollowing) return styles.followingButton;
     return styles.followButton;
@@ -188,28 +235,60 @@ export default function FollowersScreen() {
     user.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const searchUsers = async (query: string) => {
+    if (query.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('username', '>=', query.toLowerCase()), where('username', '<=', query.toLowerCase() + '\uf8ff'));
+      const querySnapshot = await getDocs(q);
+      
+      const results = querySnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(user => user.id !== auth.currentUser?.uid) // Exclude current user
+        .slice(0, 20); // Limit to 20 results
+      
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Error searching users:', error);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
   const renderUserItem = ({ item }: { item: any }) => (
-    <View style={styles.userItem}>
+    <TouchableOpacity 
+      style={styles.userItem}
+      onPress={() => router.push(`/screens/user-profile?userId=${item.id}`)}
+    >
       <View style={styles.userInfo}>
         <View style={styles.avatarContainer}>
           <Ionicons name="person-circle" size={50} color="#bbb" />
         </View>
         <View style={styles.userDetails}>
           <Text style={styles.userName}>{item.name || 'Unknown User'}</Text>
-          <Text style={styles.userUid}>{item.id}</Text>
+          <Text style={styles.userUid}>@{item.username || item.id}</Text>
         </View>
       </View>
       {auth.currentUser?.uid !== item.id && (
         <TouchableOpacity
           style={getFollowButtonStyle(item.id)}
-          onPress={() => handleFollowToggle(item.id)}
+          onPress={(e) => {
+            e.stopPropagation();
+            handleFollowToggle(item.id);
+          }}
         >
           <Text style={styles.followButtonText}>
             {getFollowButtonText(item.id)}
           </Text>
         </TouchableOpacity>
       )}
-    </View>
+    </TouchableOpacity>
   );
 
   if (loading) {
@@ -234,10 +313,9 @@ export default function FollowersScreen() {
           <Text style={styles.headerTitle}>@{user?.username || 'user'}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.addButton} onPress={() => {
-          setSearchActive(true);
-          setTimeout(() => searchInputRef.current?.focus(), 100);
+          router.push('/authenticated_tabs/profile?openSearch=true&searchSource=followers');
         }}>
-          <Ionicons name="search-outline" size={26} color={ORANGE} />
+          <Ionicons name="person-add" size={28} color={ORANGE} />
         </TouchableOpacity>
       </View>
 
@@ -281,10 +359,13 @@ export default function FollowersScreen() {
                     fontSize: 16,
                     color: '#222'
                   }]}
-                  placeholder="Search users"
+                  placeholder="Search by username or name"
                   placeholderTextColor="#999"
                   value={searchQuery}
-                  onChangeText={setSearchQuery}
+                  onChangeText={(text) => {
+                    setSearchQuery(text);
+                    searchUsers(text);
+                  }}
                   autoFocus
                 />
                 {searchQuery.length > 0 && (
@@ -301,8 +382,12 @@ export default function FollowersScreen() {
               </View>
               <ScrollView style={styles.modalScrollView}>
                 {searchQuery.trim() ? (
-                  filteredUsers.length > 0 ? (
-                    filteredUsers.map((user: any) => (
+                  searchLoading ? (
+                    <View style={{ padding: 20, alignItems: 'center' }}>
+                      <ActivityIndicator size="large" color="#fff" />
+                    </View>
+                  ) : searchResults.length > 0 ? (
+                    searchResults.map((user: any) => (
                       <TouchableOpacity 
                         key={user.id}
                         style={styles.modalItem}
@@ -513,6 +598,12 @@ const styles = StyleSheet.create({
   },
   friendsButton: {
     backgroundColor: '#4CAF50',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  pendingRequestButton: {
+    backgroundColor: '#FFA500',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 16,

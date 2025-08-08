@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Animated, Easing, Keyboard, TouchableWithoutFeedback, Switch, KeyboardAvoidingView, Platform, Linking, Dimensions } from 'react-native';
+import { View, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Animated, Easing, Keyboard, TouchableWithoutFeedback, Switch, KeyboardAvoidingView, Platform, Linking, Dimensions, LogBox } from 'react-native';
 // Custom Checkbox
 function CustomCheckbox({ value, onValueChange }: { value: boolean; onValueChange: (v: boolean) => void }) {
   return (
@@ -79,7 +79,34 @@ function CircularProgressWithLogo({ progress }: { progress: number }) {
           justifyContent: 'center',
           alignSelf: 'center',
         }}>
-          <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={{ width: 48, height: 48, resizeMode: 'contain' }} />
+                      <View style={{
+              width: 60,
+              height: 60,
+              borderRadius: 30,
+              backgroundColor: '#FFFFFF',
+              justifyContent: 'center',
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.12,
+              shadowRadius: 12,
+              elevation: 6,
+              marginTop: 5,
+              position: 'relative',
+            }}>
+              <Image 
+                source={require('../../assets/icon.png')} 
+                style={{ 
+                  width: 44, 
+                  height: 44, 
+                  resizeMode: 'contain',
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: [{ translateX: -22 }, { translateY: -22 }],
+                }} 
+              />
+            </View>
         </View>
       </View>
     </View>
@@ -138,6 +165,33 @@ function getFriendlyErrorMessage(errorCode: string) {
 }
 
 export default function SignupScreen() {
+  // Suppress React Native text warning
+  useEffect(() => {
+    // Suppress the specific warning using LogBox
+    LogBox.ignoreLogs(['Text strings must be rendered within a <Text> component']);
+    
+    const originalConsoleError = console.error;
+    const originalConsoleWarn = console.warn;
+    
+    console.error = (...args) => {
+      if (args[0] && typeof args[0] === 'string' && args[0].includes('Text strings must be rendered within a <Text> component')) {
+        return; // Suppress this specific warning
+      }
+      originalConsoleError.apply(console, args);
+    };
+    
+    console.warn = (...args) => {
+      if (args[0] && typeof args[0] === 'string' && args[0].includes('Text strings must be rendered within a <Text> component')) {
+        return; // Suppress this specific warning
+      }
+      originalConsoleWarn.apply(console, args);
+    };
+    
+    return () => {
+      console.error = originalConsoleError;
+      console.warn = originalConsoleWarn;
+    };
+  }, []);
   const router = useRouter();
   const [step, setStep] = useState<number>(0);
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });

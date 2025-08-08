@@ -372,6 +372,7 @@ export default function ChatScreen() {
           <TextInput
             style={styles.input}
             placeholder="Type a message..."
+            placeholderTextColor="#666"
             value={chatInput}
             onChangeText={setChatInput}
             editable={!sending}

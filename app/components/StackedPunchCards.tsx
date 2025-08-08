@@ -291,7 +291,7 @@ export default function StackedPunchCards({ cards, onCardPress }: StackedPunchCa
   const activeCard = cards[activeIndex];
   
   // Get the mini cards (all except active)
-  const miniCards = cards.filter((_, index) => index !== activeIndex).slice(0, 3);
+  const miniCards = cards.filter((_, index) => index !== activeIndex);
 
   return (
     <View style={styles.container}>

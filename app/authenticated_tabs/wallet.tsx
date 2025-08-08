@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, FlatList, Dimensions, TouchableOpacity, StyleSheet, TextInput, ScrollView, Modal, Animated, PanResponder, Image, Keyboard } from 'react-native';
+import { View, Text, FlatList, Dimensions, TouchableOpacity, StyleSheet, TextInput, ScrollView, Modal, Animated, PanResponder, Image } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { collection, getDocs, doc, getDoc, updateDoc, arrayRemove } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, updateDoc, arrayRemove, arrayUnion, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomText from '../../components/CustomText';
@@ -173,7 +173,7 @@ function CreditCardPunchCard({
             numberOfLines={1}
             ellipsizeMode="tail"
             adjustsFontSizeToFit={true}
-            minimumFontSize={12}
+            minimumFontScale={0.8}
           >
             {card.name || card.businessName || 'Business'}
           </CustomText>
@@ -237,40 +237,6 @@ function CreditCardPunchCard({
 
 function AnimatedSearchOverlay({ visible, onSearch, onClose }: { visible: boolean; onSearch: (query: string) => void; onClose: () => void }) {
   const [searchQuery, setSearchQuery] = useState('');
-  const slideAnimation = useRef(new Animated.Value(0)).current;
-  const opacityAnimation = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      // Animate in from right to left
-      Animated.parallel([
-        Animated.timing(slideAnimation, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnimation, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      // Animate out to the right
-      Animated.parallel([
-        Animated.timing(slideAnimation, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnimation, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [visible]);
 
   const handleSearch = (text: string) => {
     setSearchQuery(text);
@@ -281,44 +247,23 @@ function AnimatedSearchOverlay({ visible, onSearch, onClose }: { visible: boolea
     setSearchQuery('');
     onSearch('');
     onClose();
-    // Dismiss keyboard immediately
-    Keyboard.dismiss();
   };
 
-  if (!visible) return null;
-
   return (
-    <Animated.View 
-      style={[
-        styles.animatedSearchOverlay,
-        {
-          opacity: opacityAnimation,
-          transform: [
-            {
-              translateX: slideAnimation.interpolate({
-                inputRange: [0, 1],
-                outputRange: [100, 0], // Slide from right (100) to left (0)
-              }),
-            },
-          ],
-        },
-      ]}
-    >
-      <View style={styles.searchBarContainer}>
-        <AntDesign name="search1" size={20} color={COLORS.primary} />
-        <TextInput
-          style={styles.searchBarInput}
-          placeholder="Search punch cards and transactions..."
-          placeholderTextColor={COLORS.text.light}
-          value={searchQuery}
-          onChangeText={handleSearch}
-          autoFocus={visible}
-        />
-        <TouchableOpacity onPress={handleClose} style={styles.clearButton}>
-          <AntDesign name="close" size={16} color={COLORS.text.light} />
-        </TouchableOpacity>
-      </View>
-    </Animated.View>
+    <View style={styles.searchBarContainer}>
+      <AntDesign name="search1" size={20} color={COLORS.primary} />
+      <TextInput
+        style={styles.searchBarInput}
+        placeholder="Search transactions..."
+        placeholderTextColor={COLORS.text.light}
+        value={searchQuery}
+        onChangeText={handleSearch}
+        autoFocus={visible}
+      />
+      <TouchableOpacity onPress={handleClose} style={styles.clearButton}>
+        <AntDesign name="close" size={16} color={COLORS.text.light} />
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -455,7 +400,44 @@ function TransactionItem({ tx }: { tx: any }) {
 
 
 
-
+// Sample transaction data for UI
+const SAMPLE_TRANSACTIONS = [
+  {
+    id: '1',
+    business: 'Joe\'s Coffee',
+    date: '2024-06-01',
+    type: 'Punch Earned',
+    amount: '+1 Punch',
+  },
+  {
+    id: '2',
+    business: 'Pizza Palace',
+    date: '2024-05-28',
+    type: 'Reward Redeemed',
+    amount: '-10 Punches',
+  },
+  {
+    id: '3',
+    business: 'Burger Bros',
+    date: '2024-05-25',
+    type: 'Punch Earned',
+    amount: '+1 Punch',
+  },
+  {
+    id: '4',
+    business: 'Joe\'s Coffee',
+    date: '2024-05-20',
+    type: 'Punch Earned',
+    amount: '+1 Punch',
+  },
+  {
+    id: '5',
+    business: 'Pizza Palace',
+    date: '2024-05-15',
+    type: 'Punch Earned',
+    amount: '+1 Punch',
+  },
+];
 
 export default function Wallet() {
   // Load Figtree fonts
@@ -477,7 +459,9 @@ export default function Wallet() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [showAllTransactions, setShowAllTransactions] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
-
+  const [searchAnimation] = useState(new Animated.Value(-300)); // Start off-screen to the left
+  const [transactionSearchVisible, setTransactionSearchVisible] = useState(false);
+  const [transactionSearchQuery, setTransactionSearchQuery] = useState('');
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
   const [restaurantModalVisible, setRestaurantModalVisible] = useState(false);
@@ -490,20 +474,43 @@ export default function Wallet() {
   useEffect(() => {
     const fetchRestaurants = async () => {
       setLoading(true);
-      const querySnapshot = await getDocs(collection(db, 'restaurants'));
-      const data = querySnapshot.docs.map((doc, idx) => ({
-        id: doc.id,
-        ...doc.data(),
-        color: CARD_COLORS[idx % CARD_COLORS.length],
-        location: '123 Main St, Downtown',
-        lastUsed: '2 days ago',
-        punches: Math.floor(Math.random() * 10) + 1,
-        total: 10,
-      }));
-      setRestaurants(data);
+      
+      try {
+        // Fetch all restaurants (same as home page)
+        const querySnapshot = await getDocs(collection(db, 'restaurants'));
+        const data = querySnapshot.docs.map((doc, idx) => ({
+          id: doc.id,
+          ...doc.data(),
+          color: CARD_COLORS[doc.id.charCodeAt(0) % CARD_COLORS.length], // Consistent color based on ID
+          punches: Math.floor(Math.random() * 10) + 1,
+        }));
+        setRestaurants(data);
+      } catch (error) {
+        console.error('Error fetching restaurants:', error);
+        setRestaurants([]);
+      }
+      
       setLoading(false);
     };
+    
     fetchRestaurants();
+  }, []);
+
+  // Set up real-time listener for liked restaurants
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (doc: any) => {
+      if (doc.exists()) {
+        const userData = doc.data();
+        setLiked(userData.likedRestaurants || []);
+      }
+    }, (error: any) => {
+      console.error('Error listening to liked restaurants:', error);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Filter restaurants based on search and filter
@@ -524,6 +531,8 @@ export default function Wallet() {
         return true;
     }
   });
+
+
 
   const handleMenuPress = (card: any) => {
     setSelectedCard(card);
@@ -627,18 +636,26 @@ export default function Wallet() {
       
       if (userDoc.exists()) {
         const currentLiked = userDoc.data()?.likedRestaurants || [];
+        const currentPunchCards = userDoc.data()?.punchCards || [];
         const isLiked = currentLiked.includes(restaurantId);
         
         if (isLiked) {
           await updateDoc(userRef, {
             likedRestaurants: arrayRemove(restaurantId)
           });
-          setLiked(currentLiked.filter(id => id !== restaurantId));
+          setLiked(currentLiked.filter((id: string) => id !== restaurantId));
         } else {
           await updateDoc(userRef, {
             likedRestaurants: arrayUnion(restaurantId)
           });
           setLiked([...currentLiked, restaurantId]);
+          
+          // If this is a new like and the restaurant isn't already in punch cards, add it
+          if (!currentPunchCards.includes(restaurantId)) {
+            await updateDoc(userRef, {
+              punchCards: arrayUnion(restaurantId)
+            });
+          }
         }
       }
     } catch (error) {
@@ -651,22 +668,58 @@ export default function Wallet() {
   };
 
   const handleSearchToggle = () => {
-    setSearchVisible(!searchVisible);
     if (searchVisible) {
-      setSearchQuery('');
+      // Animate search bar out to the left
+      Animated.timing(searchAnimation, {
+        toValue: -300,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        setSearchVisible(false);
+        setSearchQuery('');
+      });
+    } else {
+      // Show search bar and animate in from the left
+      setSearchVisible(true);
+      Animated.timing(searchAnimation, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
     }
   };
 
   const handleSearchClose = () => {
-    setSearchVisible(false);
-    setSearchQuery('');
+    // Animate search bar out to the left
+    Animated.timing(searchAnimation, {
+      toValue: -300,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setSearchVisible(false);
+      setSearchQuery('');
+    });
   };
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
   };
 
+  const handleTransactionSearchToggle = () => {
+    setTransactionSearchVisible(!transactionSearchVisible);
+    if (transactionSearchVisible) {
+      setTransactionSearchQuery('');
+    }
+  };
 
+  const handleTransactionSearchClose = () => {
+    setTransactionSearchVisible(false);
+    setTransactionSearchQuery('');
+  };
+
+  const handleTransactionSearch = (query: string) => {
+    setTransactionSearchQuery(query);
+  };
 
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems && viewableItems.length > 0) {
@@ -674,44 +727,14 @@ export default function Wallet() {
     }
   }).current;
 
-  // Generate transactions based on actual restaurants
-  const generateTransactions = () => {
-    if (restaurants.length === 0) return [];
-    
-    const transactionTypes = [
-      { type: 'Punch Earned', amount: '+1 Punch', icon: 'checkmark-circle' },
-      { type: 'Reward Redeemed', amount: '-10 Punches', icon: 'gift' },
-      { type: 'Punch Earned', amount: '+1 Punch', icon: 'checkmark-circle' },
-      { type: 'Punch Earned', amount: '+1 Punch', icon: 'checkmark-circle' },
-      { type: 'Punch Earned', amount: '+1 Punch', icon: 'checkmark-circle' },
-    ];
+  const displayedTransactions = showAllTransactions ? SAMPLE_TRANSACTIONS : SAMPLE_TRANSACTIONS.slice(0, 3);
 
-    const dates = [
-      '2024-06-01',
-      '2024-05-28', 
-      '2024-05-25',
-      '2024-05-20',
-      '2024-05-15',
-    ];
-
-    return restaurants.slice(0, 5).map((restaurant, index) => ({
-      id: `tx-${restaurant.id}-${index}`,
-      business: restaurant.name || restaurant.businessName || 'Unknown Business',
-      date: dates[index] || '2024-05-15',
-      type: transactionTypes[index]?.type || 'Punch Earned',
-      amount: transactionTypes[index]?.amount || '+1 Punch',
-    }));
-  };
-
-  const allTransactions = generateTransactions();
-  const displayedTransactions = showAllTransactions ? allTransactions : allTransactions.slice(0, 3);
-
-  // Filter transactions based on punch card search query
+  // Filter transactions based on search query
   const filteredTransactions = displayedTransactions.filter(tx => {
-    if (!searchQuery) return true;
-    return tx.business?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           tx.type?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           tx.amount?.toString().includes(searchQuery);
+    if (!transactionSearchQuery) return true;
+    return tx.business?.toLowerCase().includes(transactionSearchQuery.toLowerCase()) ||
+           tx.type?.toLowerCase().includes(transactionSearchQuery.toLowerCase()) ||
+           tx.amount?.toString().includes(transactionSearchQuery);
   });
 
   // Don't render until fonts are loaded
@@ -744,34 +767,39 @@ export default function Wallet() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Touchable wrapper when in delete mode */}
-          {shakingCards.size > 0 ? (
-            <TouchableOpacity 
-              style={styles.deleteModeTouchable}
-              activeOpacity={1}
-              onPress={handleBackgroundPress}
-            >
-              <View style={styles.punchCardSection}>
+          {/* Punch Cards Section */}
+          <View style={styles.punchCardSection}>
             <View style={styles.punchCardHeader}>
-              <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.punchCardTitle}>
-                Punch Cards ({filteredRestaurants.length})
-              </CustomText>
+              {!searchVisible && (
+                <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.punchCardTitle}>
+                  Punch Cards ({filteredRestaurants.length})
+                </CustomText>
+              )}
+              
+              {/* Search Bar - Full width overlay */}
+              {searchVisible && (
+                <Animated.View 
+                  style={[
+                    styles.fullWidthSearchContainer,
+                    {
+                      transform: [{ translateX: searchAnimation }]
+                    }
+                  ]}
+                >
+                  <AnimatedSearchOverlay 
+                    visible={searchVisible} 
+                    onSearch={handleSearch} 
+                    onClose={handleSearchClose}
+                  />
+                </Animated.View>
+              )}
+              
               <TouchableOpacity style={styles.searchIconButton} onPress={handleSearchToggle}>
                 <AntDesign name={searchVisible ? "close" : "search1"} size={20} color={COLORS.primary} />
               </TouchableOpacity>
-              
-              {/* Animated Search Overlay */}
-              <AnimatedSearchOverlay 
-                visible={searchVisible} 
-                onSearch={handleSearch} 
-                onClose={handleSearchClose}
-              />
             </View>
 
-            {/* Add spacing when search is visible */}
-            {searchVisible && <View style={{ height: 60 }} />}
-            
-            {/* Filter Chips - Moved here under the title */}
+            {/* Filter Chips */}
             <FilterChips activeFilter={activeFilter} setActiveFilter={setActiveFilter} />
             
             {loading ? (
@@ -821,79 +849,6 @@ export default function Wallet() {
               />
             )}
           </View>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.punchCardSection}>
-              <View style={styles.punchCardHeader}>
-                <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.punchCardTitle}>
-                  Punch Cards ({filteredRestaurants.length})
-                </CustomText>
-                <TouchableOpacity style={styles.searchIconButton} onPress={handleSearchToggle}>
-                  <AntDesign name={searchVisible ? "close" : "search1"} size={20} color={COLORS.primary} />
-                </TouchableOpacity>
-                
-                {/* Animated Search Overlay */}
-                <AnimatedSearchOverlay 
-                  visible={searchVisible} 
-                  onSearch={handleSearch} 
-                  onClose={handleSearchClose}
-                />
-              </View>
-
-              {/* Add spacing when search is visible */}
-              {searchVisible && <View style={{ height: 60 }} />}
-              
-              {/* Filter Chips - Moved here under the title */}
-              <FilterChips activeFilter={activeFilter} setActiveFilter={setActiveFilter} />
-              
-              {loading ? (
-                <View style={styles.loadingContainer}>
-                  <Text>Loading...</Text>
-                </View>
-              ) : filteredRestaurants.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <AntDesign name="creditcard" size={48} color={COLORS.primary} style={styles.emptyIcon} />
-                  <CustomText variant="body" weight="medium" fontFamily="figtree" style={styles.emptyText}>
-                    No punch cards found
-                  </CustomText>
-                  <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.emptySubtext}>
-                    {searchQuery ? 'Try adjusting your search' : 'Start earning punches at local businesses'}
-                  </CustomText>
-                </View>
-              ) : (
-                <FlatList
-                  ref={flatListRef}
-                  data={filteredRestaurants}
-                  keyExtractor={(item) => item.id}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.cardsList}
-                  snapToInterval={CARD_WIDTH + CARD_SPACING}
-                  decelerationRate="fast"
-                  snapToAlignment="center"
-                  onViewableItemsChanged={onViewableItemsChanged}
-                  viewabilityConfig={{ viewAreaCoveragePercentThreshold: 50 }}
-                  getItemLayout={(data, index) => ({
-                    length: CARD_WIDTH + CARD_SPACING,
-                    offset: (CARD_WIDTH + CARD_SPACING) * index,
-                    index,
-                  })}
-                  renderItem={({ item, index }) => (
-                    <View style={styles.cardWrapper}>
-                      <CreditCardPunchCard 
-                        card={item} 
-                        isFocused={index === currentCardIndex}
-                        isShaking={shakingCards.has(item.id)}
-                        onPress={() => handleCardPress(item)}
-                        onLongPress={() => handleCardLongPress(item)}
-                        onDeletePress={() => handleDeleteButtonPress(item)}
-                      />
-                    </View>
-                  )}
-                />
-              )}
-            </View>
-          )}
 
           {/* Transaction History Section */}
           <GlassCard style={styles.sectionCard}>

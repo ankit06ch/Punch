@@ -222,7 +222,7 @@ export default function Home() {
       const data = querySnapshot.docs.map((doc, idx) => ({
         id: doc.id,
         ...doc.data(),
-        color: CARD_COLORS[idx % CARD_COLORS.length],
+        color: CARD_COLORS[doc.id.charCodeAt(0) % CARD_COLORS.length], // Consistent color based on ID
       }));
       setRestaurants(data);
       setLoadingCards(false);
@@ -230,27 +230,30 @@ export default function Home() {
     fetchRestaurants();
   }, []);
 
-  // Fetch liked restaurants
+  // Fetch liked restaurants and set up real-time listener
   useEffect(() => {
-    const fetchLiked = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (userDoc.exists()) {
-        setLiked(userDoc.data()?.likedRestaurants || []);
+    const user = auth.currentUser;
+    if (!user) return;
+
+    // Set up real-time listener for liked restaurants
+    const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (doc) => {
+      if (doc.exists()) {
+        const userData = doc.data();
+        setLiked(userData.likedRestaurants || []);
       }
-    };
-    fetchLiked();
+    }, (error) => {
+      console.error('Error listening to liked restaurants:', error);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  // Filter punch cards to only show user's favorites that have punch cards
+  // Filter punch cards to only show user's liked restaurants that have punch cards
   let favoriteCards = restaurants
     .filter(r => {
-      const restaurantName = r.name || r.businessName;
-      const isFavorite = favorites.includes(restaurantName) || 
-                        favorites.includes(r.id) ||
-                        favorites.some(fav => typeof fav === 'object' && fav.id === r.id);
-      return isFavorite;
+      // Check if this restaurant is in the user's liked restaurants
+      const isLiked = liked.includes(r.id);
+      return isLiked;
     })
     .map(card => ({
       ...card,
@@ -268,10 +271,7 @@ export default function Home() {
     }));
   }
 
-  // Debug logging
-  console.log('Favorites array:', favorites);
-  console.log('Restaurants count:', restaurants.length);
-  console.log('Favorite cards count:', favoriteCards.length);
+
 
   // Create restaurant-specific rewards based on user's favorite restaurants
   const rewards = favoriteCards.slice(0, 5).map((restaurant, index) => {

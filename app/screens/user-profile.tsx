@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, collection, serverTimestamp, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -83,8 +83,37 @@ export default function UserProfileScreen() {
       const currentUserId = currentUser.uid;
       const targetUserId = userId as string;
       const isFollowing = user?.followerUids?.includes(currentUserId);
+      const isPendingRequest = user?.pendingFollowRequests?.includes(currentUserId);
       
-      if (isFollowing) {
+      if (isPendingRequest) {
+        // Cancel follow request
+        await updateDoc(doc(db, 'users', targetUserId), {
+          pendingFollowRequests: arrayRemove(currentUserId)
+        });
+        
+        // Remove from followingUids if it was added
+        await updateDoc(doc(db, 'users', currentUserId), {
+          followingUids: arrayRemove(targetUserId),
+          pendingFollowRequests: arrayRemove(targetUserId)
+        });
+        
+        // Delete the follow request notification
+        const notificationsQuery = query(
+          collection(db, 'notifications'),
+          where('type', '==', 'follow_request'),
+          where('fromUserId', '==', currentUserId),
+          where('toUserId', '==', targetUserId),
+          where('status', '==', 'pending')
+        );
+        const notificationSnapshot = await getDocs(notificationsQuery);
+        
+        // Delete all matching notifications (should be only one)
+        const deletePromises = notificationSnapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deletePromises);
+        
+        setFollowRequestSent(false);
+        Alert.alert('Request Cancelled', 'Your follow request has been cancelled.');
+      } else if (isFollowing) {
         // Unfollow (works for both public and private)
         await updateDoc(doc(db, 'users', currentUserId), {
           followingUids: arrayRemove(targetUserId),
@@ -227,7 +256,7 @@ export default function UserProfileScreen() {
   const getFollowButtonText = () => {
     if (followButtonLoading) return 'Loading...';
     if (isFollowing) return 'Following';
-    if (followRequestSent) return 'Follow request sent!';
+    if (followRequestSent) return 'Cancel Request';
     return 'Follow';
   };
 

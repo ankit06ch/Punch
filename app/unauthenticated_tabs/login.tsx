@@ -42,7 +42,7 @@ export default function LoginScreen() {
       setIsKeyboardDismissing(false);
       const keyboardHeight = e.endCoordinates.height;
       const screenHeight = Dimensions.get('window').height;
-      const maxOffset = Math.min(keyboardHeight * 0.1, 20); // Reduced offset
+      const maxOffset = Math.min(keyboardHeight * 0.01, 2); // Reduced offset even more
       
       Animated.timing(modalAnim, {
         toValue: -maxOffset,
@@ -181,7 +181,22 @@ export default function LoginScreen() {
           </TouchableOpacity>
           {/* Logo above card */}
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, alignItems: 'center' }}>
-            <Image source={require('../../assets/Punch_Logos/Punch_T/black_logo.png')} style={{ width: 90, height: 90, resizeMode: 'contain' }} />
+            <View style={{
+              width: 110,
+              height: 110,
+              borderRadius: 55,
+              backgroundColor: '#FFFFFF',
+              justifyContent: 'center',
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.15,
+              shadowRadius: 20,
+              elevation: 10,
+              marginTop: 20,
+            }}>
+              <Image source={require('../../assets/icon.png')} style={{ width: 80, height: 80, resizeMode: 'contain' }} />
+            </View>
           </View>
         {/* Animated modal card */}
         <TouchableWithoutFeedback onPress={dismissKeyboard}>
@@ -189,7 +204,7 @@ export default function LoginScreen() {
             position: 'absolute',
             left: 24,
             right: 24,
-            bottom: 40,
+            bottom: -40,
             width: MODAL_WIDTH,
             zIndex: 10,
             minHeight: MODAL_HEIGHT,

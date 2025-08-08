@@ -71,12 +71,12 @@ export default function RestaurantModal({ restaurant, visible, onClose, likedRes
         panAnimation.setValue(0);
       },
       onPanResponderMove: (_, gestureState) => {
-        // If expanded, only allow downward movement
+        // If expanded, only allow downward movement (positive dy)
         if (isExpanded && gestureState.dy < 0) {
-          // Lock upward movement when expanded
+          // Lock upward movement when expanded - don't update panAnimation
           return;
         }
-        // Allow both up and down movement with gradual reveal
+        // Allow movement in allowed directions
         panAnimation.setValue(gestureState.dy);
       },
       onPanResponderRelease: (_, gestureState) => {
@@ -95,7 +95,7 @@ export default function RestaurantModal({ restaurant, visible, onClose, likedRes
               friction: 8,
             }).start();
           } else {
-            // Already expanded, just snap back to position
+            // Already expanded, just snap back to position (no further expansion)
             Animated.spring(panAnimation, {
               toValue: 0,
               useNativeDriver: true,
@@ -247,23 +247,29 @@ export default function RestaurantModal({ restaurant, visible, onClose, likedRes
         activeOpacity={1}
       />
       
-      <Animated.View 
-        style={[
-          styles.modalContainer,
-          {
-            height: isExpanded ? height * 0.9 : height * 0.3, // Preview: 30%, Expanded: 90%
-            transform: [{
-              translateY: Animated.add(
-                modalAnimation.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [height, 0],
-                }),
-                panAnimation
-              )
-            }]
-          }
-        ]}
-      >
+              <Animated.View 
+          style={[
+            styles.modalContainer,
+            {
+              height: isExpanded ? height * 0.9 : height * 0.3, // Preview: 30%, Expanded: 90%
+              transform: [{
+                translateY: Animated.add(
+                  modalAnimation.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [height, 0],
+                  }),
+                  // Prevent upward movement beyond the modal's natural position when expanded
+                  isExpanded ? 
+                    panAnimation.interpolate({
+                      inputRange: [-1000, 0, 1000],
+                      outputRange: [0, 0, 1000], // Lock at 0 for negative values (upward movement)
+                    }) : 
+                    panAnimation
+                )
+              }]
+            }
+          ]}
+        >
         <BlurView intensity={30} tint="light" style={styles.modalContent} {...panResponder.panHandlers}>
           {/* Heart Animation Overlay */}
           <Animated.View 

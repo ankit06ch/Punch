@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, ScrollView, FlatList, Share, Animated, TextInput, Dimensions, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons, Feather, AntDesign } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -34,7 +34,7 @@ export default function Profile() {
     Figtree_900Black,
   });
 
-  const { showMessages: showMessagesParam } = useLocalSearchParams();
+  const { showMessages: showMessagesParam, openSearch: openSearchParam, searchSource } = useLocalSearchParams();
   
   // All hooks at the top (already correct in your file)
   const [modalVisible, setModalVisible] = useState(false);
@@ -182,6 +182,12 @@ export default function Profile() {
     }
   }, [showMessagesParam]);
 
+  useEffect(() => {
+    if (openSearchParam === 'true') {
+      openSearch();
+    }
+  }, [openSearchParam]);
+
   // Animate scale when modalVisible or showMessages changes
   useEffect(() => {
     if (modalVisible || showMessages) {
@@ -248,7 +254,7 @@ export default function Profile() {
     // Set up real-time listener for user data changes
     const user = auth.currentUser;
     if (user) {
-      const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (doc) => {
+      const unsubscribe = onSnapshot(doc(db, 'users', user.uid), async (doc) => {
         if (doc.exists() && isMounted) {
           const data = doc.data();
           setUserData(data);
@@ -258,7 +264,9 @@ export default function Profile() {
           setHasSeenPunchoIntro(data.hasSeenPunchoIntro || false);
           
           // Update liked restaurants when they change
-          fetchLikedRestaurantsWithNames(data.likedRestaurants || []);
+          if (isMounted) {
+            await fetchLikedRestaurantsWithNames(data.likedRestaurants || []);
+          }
         }
       });
       
@@ -678,6 +686,13 @@ export default function Profile() {
       setSearchActive(false);
       setSearchQuery('');
       setSearchResults([]);
+      
+      // Navigate back to source page if search was accessed from followers/following
+      if (searchSource === 'followers') {
+        router.push('/screens/followers');
+      } else if (searchSource === 'following') {
+        router.push('/screens/following');
+      }
     });
   };
 
@@ -693,9 +708,13 @@ export default function Profile() {
       try {
         const querySnapshot = await getDocs(collection(db, 'users'));
         const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
-        const filtered = data.filter((user: any) =>
-          user.username && user.username.toLowerCase().includes(searchQuery.trim().toLowerCase())
-        );
+        const filtered = data.filter((user: any) => {
+          const searchTerm = searchQuery.trim().toLowerCase();
+          const username = user.username?.toLowerCase() || '';
+          const name = user.name?.toLowerCase() || '';
+          
+          return username.includes(searchTerm) || name.includes(searchTerm);
+        });
         if (!isCancelled) {
           setSearchResults(filtered);
         }
@@ -943,6 +962,20 @@ export default function Profile() {
     );
   };
 
+  // Calculate actual following count (excluding pending requests)
+  const actualFollowingCount = useMemo(() => {
+    if (!userData?.followingUids || !userData?.pendingFollowRequests) {
+      return userData?.followingCount || 0;
+    }
+    
+    // Count only accepted follows (followingUids minus pendingFollowRequests)
+    const acceptedFollows = userData.followingUids.filter((uid: string) => 
+      !userData.pendingFollowRequests.includes(uid)
+    );
+    
+    return acceptedFollows.length;
+  }, [userData?.followingUids, userData?.pendingFollowRequests, userData?.followingCount]);
+
   // Don't render until fonts are loaded
   if (!fontsLoaded) {
     return (
@@ -1051,7 +1084,7 @@ export default function Profile() {
             <View style={styles.statSeparator} />
             
             <TouchableOpacity style={styles.statItem} onPress={() => router.push(`/screens/following?userId=${userData.id || auth.currentUser?.uid}`)}>
-              <Text style={styles.statNumber}>{userData.followingCount || 0}</Text>
+              <Text style={styles.statNumber}>{actualFollowingCount}</Text>
               <Text style={styles.statLabel}>Following</Text>
             </TouchableOpacity>
             
@@ -1224,7 +1257,7 @@ export default function Profile() {
               </TouchableOpacity>
               <TextInput
                 style={{ flex: 1, backgroundColor: 'white', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#222' }}
-                placeholder="Search users..."
+                placeholder="Search by username or name..."
                 placeholderTextColor="#fb7a20"
                 value={searchQuery}
                 onChangeText={setSearchQuery}

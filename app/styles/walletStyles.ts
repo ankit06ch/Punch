@@ -94,6 +94,14 @@ export default StyleSheet.create({
     marginBottom: 16,
     padding: 16,
   },
+  inlineSearchContainer: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
+  fullWidthSearchContainer: {
+    flex: 1,
+    marginRight: 12,
+  },
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
