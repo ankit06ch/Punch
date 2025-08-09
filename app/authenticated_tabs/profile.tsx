@@ -730,8 +730,7 @@ export default function Profile() {
       
       const result = await Share.share({
         title: `${userData.username}'s Punch Profile`,
-        message: `Check out ${userData.username}'s profile on Punch!\n\nView Profile: ${webUrl}`,
-        url: webUrl
+        message: `Check out ${userData.username}'s profile on Punch!\n\nView Profile: ${webUrl}`
       });
     } catch (error) {
       console.error('Error sharing:', error);
