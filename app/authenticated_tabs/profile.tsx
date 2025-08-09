@@ -1211,19 +1211,7 @@ export default function Profile() {
 
       {/* Profile content with zoom-out animation */}
       <Animated.View style={[styles.profileContent, { transform: [{ scale: profileScale }] }]}> 
-        <ScrollView 
-          style={{ flex: 1, width: '100%' }}
-          contentContainerStyle={{ alignItems: 'center', paddingBottom: 120 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[ORANGE]}
-              tintColor={ORANGE}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-        >
+        <View style={{ width: '100%', alignItems: 'center' }}>
           <View style={styles.avatarContainer}>
             <TouchableOpacity 
               style={styles.avatarCircle} 
@@ -1340,7 +1328,13 @@ export default function Profile() {
             marginHorizontal: 20 
           }} />
         </View>
-        
+        </View>
+        {/* Scrollable section only for Liked/Rewards */}
+        <ScrollView 
+          style={{ flex: 1, width: '100%' }}
+          contentContainerStyle={{ paddingBottom: 120, alignItems: 'center' }}
+          showsVerticalScrollIndicator={false}
+        >
         {/* Liked Restaurants Section */}
         {selectedProfileTab === 'liked' && (
           <View style={{ width: '100%', marginTop: 8 }}>
@@ -1386,7 +1380,7 @@ export default function Profile() {
             )}
           </View>
         )}
-
+        
         {/* Rewards History Section */}
         {selectedProfileTab === 'rewards' && (
           <View style={{ width: '100%', marginTop: 8 }}>
