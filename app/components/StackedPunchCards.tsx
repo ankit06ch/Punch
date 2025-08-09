@@ -176,13 +176,21 @@ function BigCard({
           }
         ]}
       >
-      {/* Punch Logo */}
+      {/* Bottom-most large logo: use restaurant logo if available, else Punch P */}
       <View style={styles.bigCardLogoContainer}>
-        <Image 
-          source={require('../../assets/Punch_Logos/PunchP_logo/punchPlogo.png')} 
-          style={styles.bigCardLogo}
-          resizeMode="contain"
-        />
+        {card.logo ? (
+          <Image 
+            source={card.logo}
+            style={[styles.bigCardLogo, { tintColor: undefined }]}
+            resizeMode="contain"
+          />
+        ) : (
+          <Image 
+            source={require('../../assets/Punch_Logos/PunchP_logo/punchPlogo.png')} 
+            style={styles.bigCardLogo}
+            resizeMode="contain"
+          />
+        )}
       </View>
 
       {/* Card Content */}
@@ -191,7 +199,15 @@ function BigCard({
         <View style={styles.cardHeader}>
           <View style={styles.cardLogoSection}>
             <View style={styles.cardLogo}>
-              <AntDesign name="star" size={20} color="white" />
+              {card.logo ? (
+                <Image 
+                  source={card.logo}
+                  style={{ width: 36, height: 36, borderRadius: 18 }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <AntDesign name="star" size={20} color="white" />
+              )}
             </View>
             <CustomText 
               variant="title" 

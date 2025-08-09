@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Image, ActivityIndicator, Keyboard, Modal, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, getDocs, query, where, deleteDoc, addDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, getDocs, query, where, deleteDoc, addDoc, increment } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
@@ -81,7 +81,7 @@ export default function FollowersScreen() {
           
           // Only include users that are actually following (not pending requests)
           // unless the current user is viewing their own following list
-          if (!isPendingRequest || auth.currentUser?.uid === userId) {
+          if (!isPendingRequest) {
             followingData.push({ 
               id: uid, 
               ...userData,
@@ -135,11 +135,11 @@ export default function FollowersScreen() {
         // Unfollow
         await updateDoc(doc(db, 'users', currentUserId), {
           followingUids: arrayRemove(targetUserId),
-          followingCount: (currentUser.followingCount || 1) - 1,
+          followingCount: increment(-1),
         });
         await updateDoc(doc(db, 'users', targetUserId), {
           followerUids: arrayRemove(currentUserId),
-          followersCount: (followers.find(f => f.id === targetUserId)?.followersCount || 1) - 1,
+          followersCount: increment(-1),
         });
       } else {
         // Check if target user has private profile
@@ -153,11 +153,11 @@ export default function FollowersScreen() {
           // Public profile - auto follow
           await updateDoc(doc(db, 'users', currentUserId), {
             followingUids: arrayUnion(targetUserId),
-            followingCount: (currentUser.followingCount || 0) + 1,
+            followingCount: increment(1),
           });
           await updateDoc(doc(db, 'users', targetUserId), {
             followerUids: arrayUnion(currentUserId),
-            followersCount: (followers.find(f => f.id === targetUserId)?.followersCount || 0) + 1,
+            followersCount: increment(1),
           });
         }
       }

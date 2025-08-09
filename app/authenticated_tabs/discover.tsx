@@ -117,19 +117,24 @@ export default function Discover() {
       setRestaurants(data);
     }
     
-    // Generate dynamic categories from restaurant data
+    // Generate dynamic categories from restaurant data (support arrays like cuisines: ["Breakfast", "Brunch"]) 
     const cuisineTypes = new Set<string>();
-    data.forEach(restaurant => {
-      if (restaurant.cuisine) {
-        // Split by commas only, treat each comma-separated item as a single tag
-        const cuisineTags = restaurant.cuisine.split(',').filter((tag: string) => tag.trim().length > 0);
-        cuisineTags.forEach((tag: string) => cuisineTypes.add(tag.trim()));
-      }
-      if (restaurant.type) {
-        // Split by commas only, treat each comma-separated item as a single tag
-        const typeTags = restaurant.type.split(',').filter((tag: string) => tag.trim().length > 0);
-        typeTags.forEach((tag: string) => cuisineTypes.add(tag.trim()));
-      }
+    data.forEach((restaurant) => {
+      const cuisineArray: string[] = Array.isArray(restaurant.cuisines)
+        ? restaurant.cuisines
+        : (typeof restaurant.cuisine === 'string'
+            ? restaurant.cuisine.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0)
+            : []);
+
+      cuisineArray.forEach((t) => cuisineTypes.add(t));
+
+      const typeArray: string[] = Array.isArray(restaurant.types)
+        ? restaurant.types
+        : (typeof restaurant.type === 'string'
+            ? restaurant.type.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0)
+            : []);
+
+      typeArray.forEach((t) => cuisineTypes.add(t));
     });
     
     const dynamicCategories = ['All', ...Array.from(cuisineTypes).sort()];
@@ -273,15 +278,19 @@ export default function Discover() {
     });
   };
 
-  // Filter by category and search
+  // Filter by category and search (supports string or array fields)
   const filteredRestaurants = restaurants.filter(r => {
     const matchesSearch = r.name.toLowerCase().includes(search.toLowerCase());
     
     let matchesCategory = activeCategory === 'All';
     if (activeCategory !== 'All') {
-      const cuisineTags = r.cuisine ? r.cuisine.toLowerCase().split(',').map((tag: string) => tag.trim()) : [];
-      const typeTags = r.type ? r.type.toLowerCase().split(',').map((tag: string) => tag.trim()) : [];
-      const allTags = [...cuisineTags, ...typeTags];
+      const cuisineArray: string[] = Array.isArray(r.cuisines)
+        ? r.cuisines
+        : (typeof r.cuisine === 'string' ? r.cuisine.split(',').map((t: string) => t.trim()) : []);
+      const typeArray: string[] = Array.isArray(r.types)
+        ? r.types
+        : (typeof r.type === 'string' ? r.type.split(',').map((t: string) => t.trim()) : []);
+      const allTags = [...cuisineArray, ...typeArray].map((t) => t.toLowerCase());
       matchesCategory = allTags.includes(activeCategory.toLowerCase());
     }
     
@@ -328,8 +337,22 @@ export default function Discover() {
             <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.distance}</Text></View>
             <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{typeof item.hours === 'object' ? 'Open' : item.hours}</Text></View>
             <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.price}</Text></View>
-            {item.cuisine && <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.cuisine}</Text></View>}
-            {item.rating && <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>★ {item.rating}</Text></View>}
+            {(() => {
+              const cuisineArray: string[] = Array.isArray(item.cuisines)
+                ? item.cuisines
+                : (typeof item.cuisine === 'string' ? item.cuisine.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0) : []);
+              return cuisineArray.slice(0, 2).map((tag: string, idx: number) => (
+                <View key={`cuisine-${item.id}-${idx}`} style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{tag}</Text></View>
+              ));
+            })()}
+            {(() => {
+              const typeArray: string[] = Array.isArray(item.types)
+                ? item.types
+                : (typeof item.type === 'string' ? item.type.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0) : []);
+              return typeArray.slice(0, 1).map((tag: string, idx: number) => (
+                <View key={`type-${item.id}-${idx}`} style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{tag}</Text></View>
+              ));
+            })()}
           </View>
         </View>
         <TouchableOpacity onPress={() => toggleLike(item.id)} style={styles.heartButton}>
@@ -419,8 +442,22 @@ export default function Discover() {
                     <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.distance}</Text></View>
                     <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{typeof item.hours === 'object' ? 'Open' : item.hours}</Text></View>
                     <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.price}</Text></View>
-                    {item.cuisine && <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{item.cuisine}</Text></View>}
-                    {item.rating && <View style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>★ {item.rating}</Text></View>}
+                    {(() => {
+                      const cuisineArray: string[] = Array.isArray(item.cuisines)
+                        ? item.cuisines
+                        : (typeof item.cuisine === 'string' ? item.cuisine.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0) : []);
+                      return cuisineArray.slice(0, 2).map((tag: string, idx: number) => (
+                        <View key={`cuisine-${item.id}-${idx}`} style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{tag}</Text></View>
+                      ));
+                    })()}
+                    {(() => {
+                      const typeArray: string[] = Array.isArray(item.types)
+                        ? item.types
+                        : (typeof item.type === 'string' ? item.type.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0) : []);
+                      return typeArray.slice(0, 1).map((tag: string, idx: number) => (
+                        <View key={`type-${item.id}-${idx}`} style={discoverStyles.badge}><Text style={discoverStyles.badgeText}>{tag}</Text></View>
+                      ));
+                    })()}
                   </View>
                 </View>
                 <TouchableOpacity onPress={() => toggleLike(item.id)} style={styles.heartButton}>
@@ -503,19 +540,19 @@ export default function Discover() {
             <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
               {searchQuery.trim() ? (
                 searchResults.length > 0 ? (
-                                  searchResults.map((r: any) => (
-                  <TouchableOpacity 
-                    key={r.id} 
-                    style={{ paddingVertical: 20, borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }}
-                    onPress={() => {
-                      handleRestaurantPress(r);
-                      closeSearch();
-                    }}
-                  >
-                    <Text style={{ color: '#fff', fontSize: 22 }}>{r.name}</Text>
-                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 16, marginTop: 4 }}>{r.cuisine} • {r.distance}</Text>
-                  </TouchableOpacity>
-                ))
+                  searchResults.map((r: any) => (
+                    <TouchableOpacity 
+                      key={r.id} 
+                      style={{ paddingVertical: 20, borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }}
+                      onPress={() => {
+                        handleRestaurantPress(r);
+                        closeSearch();
+                      }}
+                    >
+                      <Text style={{ color: '#fff', fontSize: 22 }}>{r.name}</Text>
+                      <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 16, marginTop: 4 }}>{r.cuisine || r.cuisines?.join(', ')}</Text>
+                    </TouchableOpacity>
+                  ))
                 ) : (
                   <Text style={{ color: '#fff', fontSize: 20, textAlign: 'center', marginTop: 60 }}>
                     No restaurants found.

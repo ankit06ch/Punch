@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../firebase/config';
 
 export interface ProfilePictureResult {
@@ -79,11 +79,13 @@ export const uploadProfilePicture = async (
 export const deleteProfilePicture = async (userId: string): Promise<boolean> => {
   try {
     const storageRef = ref(storage, `profile-pictures/${userId}.jpg`);
-    // Note: Firebase Storage doesn't have a direct delete method in the web SDK
-    // You would need to use the Admin SDK or handle this differently
-    // For now, we'll just return true as the file will be overwritten on next upload
+    await deleteObject(storageRef);
     return true;
-  } catch (error) {
+  } catch (error: any) {
+    if (error && error.code === 'storage/object-not-found') {
+      // It's ok if there wasn't a previous image
+      return true;
+    }
     console.error('Error deleting profile picture:', error);
     return false;
   }

@@ -17,7 +17,7 @@ interface Restaurant {
   longitude?: number;
   color: string;
   distance?: string;
-  hours?: string;
+  hours?: any;
   price?: string;
   cuisine?: string;
   rating?: string;
@@ -44,6 +44,33 @@ const COLORS = {
     light: '#BDC3C7',
   },
 };
+
+// Ordered days and common aliases to normalize keys
+const DAY_ORDER = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const DAY_ALIASES: Record<string, string[]> = {
+  Sunday: ['Sun','sun','sunday'],
+  Monday: ['Mon','mon','monday'],
+  Tuesday: ['Tue','Tues','tue','tues','tuesday'],
+  Wednesday: ['Wed','wed','wednesday'],
+  Thursday: ['Thu','Thurs','thu','thurs','thursday'],
+  Friday: ['Fri','fri','friday'],
+  Saturday: ['Sat','sat','saturday'],
+};
+
+function getHoursForDay(hoursObj: any, canonicalDay: string): string | undefined {
+  if (!hoursObj) return undefined;
+  // Direct match
+  if (hoursObj[canonicalDay] != null) return hoursObj[canonicalDay];
+  // Case-insensitive and alias match
+  const aliases = DAY_ALIASES[canonicalDay] || [];
+  for (const key of Object.keys(hoursObj)) {
+    const lowerKey = String(key).toLowerCase();
+    if (lowerKey === canonicalDay.toLowerCase() || aliases.includes(key as string) || aliases.includes(lowerKey)) {
+      return hoursObj[key];
+    }
+  }
+  return undefined;
+}
 
 export default function RestaurantModal({ restaurant, visible, onClose, likedRestaurants, onLikeUpdate }: RestaurantModalProps) {
   const modalAnimation = useRef(new Animated.Value(0)).current;
@@ -247,29 +274,29 @@ export default function RestaurantModal({ restaurant, visible, onClose, likedRes
         activeOpacity={1}
       />
       
-              <Animated.View 
-          style={[
-            styles.modalContainer,
-            {
-              height: isExpanded ? height * 0.9 : height * 0.3, // Preview: 30%, Expanded: 90%
-              transform: [{
-                translateY: Animated.add(
-                  modalAnimation.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [height, 0],
-                  }),
-                  // Prevent upward movement beyond the modal's natural position when expanded
-                  isExpanded ? 
-                    panAnimation.interpolate({
-                      inputRange: [-1000, 0, 1000],
-                      outputRange: [0, 0, 1000], // Lock at 0 for negative values (upward movement)
-                    }) : 
-                    panAnimation
-                )
-              }]
-            }
-          ]}
-        >
+      <Animated.View 
+        style={[
+          styles.modalContainer,
+          {
+            height: isExpanded ? height * 0.9 : height * 0.3, // Preview: 30%, Expanded: 90%
+            transform: [{
+              translateY: Animated.add(
+                modalAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [height, 0],
+                }),
+                // Prevent upward movement beyond the modal's natural position when expanded
+                isExpanded ? 
+                  panAnimation.interpolate({
+                    inputRange: [-1000, 0, 1000],
+                    outputRange: [0, 0, 1000], // Lock at 0 for negative values (upward movement)
+                  }) : 
+                  panAnimation
+              )
+            }]
+          }
+        ]}
+      >
         <BlurView intensity={30} tint="light" style={styles.modalContent} {...panResponder.panHandlers}>
           {/* Heart Animation Overlay */}
           <Animated.View 
@@ -311,186 +338,189 @@ export default function RestaurantModal({ restaurant, visible, onClose, likedRes
               
               {/* Header with Logo, Name, Cuisine, and Close Button */}
               <View style={styles.modalHeader}>
-            <View style={styles.logoContainer}>
-              {restaurant.logoUrl ? (
-                <Image source={{ uri: restaurant.logoUrl }} style={styles.logo} />
-              ) : (
-                <View style={[styles.logoPlaceholder, { backgroundColor: restaurant.color }]}>
-                  <AntDesign name="home" size={24} color="white" />
+                <View style={styles.logoContainer}>
+                  {restaurant.logoUrl ? (
+                    <Image source={{ uri: restaurant.logoUrl }} style={styles.logo} />
+                  ) : (
+                    <View style={[styles.logoPlaceholder, { backgroundColor: restaurant.color }]}>
+                      <AntDesign name="home" size={24} color="white" />
+                    </View>
+                  )}
+                </View>
+                
+                <View style={styles.titleContainer}>
+                  <CustomText variant="title" weight="bold" fontFamily="figtree" style={styles.restaurantName}>
+                    {restaurant.name}
+                  </CustomText>
+                  <View style={styles.titleRow}>
+                    {restaurant.cuisine && (
+                      <CustomText variant="body" weight="normal" fontFamily="figtree" style={styles.cuisine}>
+                        {restaurant.cuisine}
+                      </CustomText>
+                    )}
+                    {isLiked && (
+                      <AntDesign name="heart" size={16} color="#FF6B6B" style={styles.likeIndicator} />
+                    )}
+                  </View>
+                </View>
+                
+                <TouchableOpacity 
+                  style={styles.closeButton}
+                  onPress={closeModal}
+                >
+                  <AntDesign name="close" size={20} color={COLORS.text.primary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Preview Mode - Quick Info */}
+              {!isExpanded && (
+                <View style={styles.previewContent}>
+                  <View style={styles.quickInfoRow}>
+                    {restaurant.distance && (
+                      <View style={styles.quickInfoItem}>
+                        <AntDesign name="enviroment" size={14} color={COLORS.text.light} />
+                        <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.quickInfoText}>
+                          {restaurant.distance}
+                        </CustomText>
+                      </View>
+                    )}
+                    
+                    {restaurant.rating && (
+                      <View style={styles.quickInfoItem}>
+                        <AntDesign name="star" size={14} color="#FFD700" />
+                        <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.quickInfoText}>
+                          {restaurant.rating}
+                        </CustomText>
+                      </View>
+                    )}
+                    
+                    {restaurant.price && (
+                      <View style={styles.quickInfoItem}>
+                        <AntDesign name="star" size={14} color={COLORS.text.light} />
+                        <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.quickInfoText}>
+                          {restaurant.price}
+                        </CustomText>
+                      </View>
+                    )}
+                  </View>
+                  
+                  <View style={styles.previewHint}>
+                    <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.previewHintText}>
+                      Drag up to see address & details
+                    </CustomText>
+                    <AntDesign name="up" size={16} color={COLORS.text.light} />
+                  </View>
                 </View>
               )}
-            </View>
-            
-            <View style={styles.titleContainer}>
-              <CustomText variant="title" weight="bold" fontFamily="figtree" style={styles.restaurantName}>
-                {restaurant.name}
-              </CustomText>
-              <View style={styles.titleRow}>
-                {restaurant.cuisine && (
-                  <CustomText variant="body" weight="normal" fontFamily="figtree" style={styles.cuisine}>
-                    {restaurant.cuisine}
-                  </CustomText>
-                )}
-                {isLiked && (
-                  <AntDesign name="heart" size={16} color="#FF6B6B" style={styles.likeIndicator} />
-                )}
-              </View>
-            </View>
-            
-            <TouchableOpacity 
-              style={styles.closeButton}
-              onPress={closeModal}
-            >
-              <AntDesign name="close" size={20} color={COLORS.text.primary} />
-            </TouchableOpacity>
-          </View>
 
-          {/* Preview Mode - Quick Info */}
-          {!isExpanded && (
-            <View style={styles.previewContent}>
-              <View style={styles.quickInfoRow}>
-                {restaurant.distance && (
-                  <View style={styles.quickInfoItem}>
-                    <AntDesign name="enviroment" size={14} color={COLORS.text.light} />
-                    <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.quickInfoText}>
-                      {restaurant.distance}
-                    </CustomText>
-                  </View>
-                )}
-                
-                {restaurant.rating && (
-                  <View style={styles.quickInfoItem}>
-                    <AntDesign name="star" size={14} color="#FFD700" />
-                    <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.quickInfoText}>
-                      {restaurant.rating}
-                    </CustomText>
-                  </View>
-                )}
-                
-                {restaurant.price && (
-                  <View style={styles.quickInfoItem}>
-                    <AntDesign name="star" size={14} color={COLORS.text.light} />
-                    <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.quickInfoText}>
-                      {restaurant.price}
-                    </CustomText>
-                  </View>
-                )}
-              </View>
-              
-              <View style={styles.previewHint}>
-                <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.previewHintText}>
-                  Drag up to see address & details
-                </CustomText>
-                <AntDesign name="up" size={16} color={COLORS.text.light} />
-              </View>
-            </View>
-          )}
+              {/* Expanded Mode - Full Content */}
+              {isExpanded && (
+                <>
+                  <ScrollView style={styles.expandableContent} showsVerticalScrollIndicator={false}>
+                    {/* Quick Info Row */}
+                    <View style={styles.quickInfoRow}>
+                      {restaurant.distance && (
+                        <View style={styles.quickInfoItem}>
+                          <AntDesign name="enviroment" size={14} color={COLORS.text.light} />
+                          <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.quickInfoText}>
+                            {restaurant.distance}
+                          </CustomText>
+                        </View>
+                      )}
+                      
+                      {restaurant.rating && (
+                        <View style={styles.quickInfoItem}>
+                          <AntDesign name="star" size={14} color="#FFD700" />
+                          <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.quickInfoText}>
+                            {restaurant.rating}
+                          </CustomText>
+                        </View>
+                      )}
+                      
+                      {restaurant.price && (
+                        <View style={styles.quickInfoItem}>
+                          <AntDesign name="star" size={14} color={COLORS.text.light} />
+                          <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.quickInfoText}>
+                            {restaurant.price}
+                          </CustomText>
+                        </View>
+                      )}
+                    </View>
 
-          {/* Expanded Mode - Full Content */}
-          {isExpanded && (
-            <>
-              <ScrollView style={styles.expandableContent} showsVerticalScrollIndicator={false}>
-                {/* Quick Info Row */}
-                <View style={styles.quickInfoRow}>
-                  {restaurant.distance && (
-                    <View style={styles.quickInfoItem}>
-                      <AntDesign name="enviroment" size={14} color={COLORS.text.light} />
-                      <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.quickInfoText}>
-                        {restaurant.distance}
+                    {/* Address Section */}
+                    <View style={styles.section}>
+                      <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.sectionTitle}>
+                        Address
                       </CustomText>
+                      <View style={styles.addressContainer}>
+                        <CustomText variant="body" weight="normal" fontFamily="figtree" style={styles.addressText}>
+                          {restaurant.location || "123 Main Street, Cumming, GA 30040"}
+                        </CustomText>
+                        <TouchableOpacity style={styles.directionsButton} onPress={openDirections}>
+                          <AntDesign name="right" size={16} color={COLORS.primary} />
+                          <CustomText variant="caption" weight="medium" fontFamily="figtree" style={styles.directionsButtonText}>
+                            Get Directions
+                          </CustomText>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  )}
-                  
-                  {restaurant.rating && (
-                    <View style={styles.quickInfoItem}>
-                      <AntDesign name="star" size={14} color="#FFD700" />
-                      <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.quickInfoText}>
-                        {restaurant.rating}
-                      </CustomText>
-                    </View>
-                  )}
-                  
-                  {restaurant.price && (
-                    <View style={styles.quickInfoItem}>
-                      <AntDesign name="star" size={14} color={COLORS.text.light} />
-                      <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.quickInfoText}>
-                        {restaurant.price}
-                      </CustomText>
-                    </View>
-                  )}
-                </View>
 
-                {/* Address Section */}
-                <View style={styles.section}>
-                  <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.sectionTitle}>
-                    Address
-                  </CustomText>
-                  <View style={styles.addressContainer}>
-                    <CustomText variant="body" weight="normal" fontFamily="figtree" style={styles.addressText}>
-                      {restaurant.location || "123 Main Street, Cumming, GA 30040"}
-                    </CustomText>
-                    <TouchableOpacity style={styles.directionsButton} onPress={openDirections}>
-                      <AntDesign name="right" size={16} color={COLORS.primary} />
-                      <CustomText variant="caption" weight="medium" fontFamily="figtree" style={styles.directionsButtonText}>
-                        Get Directions
+                    {/* Hours Section */}
+                    {restaurant.hours && typeof restaurant.hours === 'object' && (
+                      <View style={styles.section}>
+                        <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.sectionTitle}>
+                          Hours
+                        </CustomText>
+                        {DAY_ORDER.map((day) => {
+                          const val = getHoursForDay(restaurant.hours, day);
+                          return (
+                            <View key={day} style={styles.hoursRow}>
+                              <CustomText variant="caption" weight="medium" fontFamily="figtree" style={styles.hoursDay}>
+                                {day}
+                              </CustomText>
+                              <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.hoursTime}>
+                                {val || 'Closed'}
+                              </CustomText>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+
+                    {/* Active Rewards Section */}
+                    {restaurant.activeRewards && restaurant.activeRewards.length > 0 && (
+                      <View style={styles.section}>
+                        <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.sectionTitle}>
+                          Active Rewards
+                        </CustomText>
+                        {restaurant.activeRewards.map((reward: any, index: number) => (
+                          <View key={index} style={styles.rewardItem}>
+                            <CustomText variant="body" weight="medium" fontFamily="figtree" style={styles.rewardTitle}>
+                              {reward.title}
+                            </CustomText>
+                            <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.rewardDescription}>
+                              {reward.description}
+                            </CustomText>
+                            <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.rewardPunches}>
+                              {reward.punchesRequired} punches required
+                            </CustomText>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </ScrollView>
+
+                  {/* Action Buttons */}
+                  <View style={styles.actionButtons}>
+                    <TouchableOpacity style={styles.actionButton}>
+                      <AntDesign name="star" size={18} color={COLORS.primary} />
+                      <CustomText variant="caption" weight="medium" fontFamily="figtree" style={styles.actionButtonText}>
+                        Add to Favorites
                       </CustomText>
                     </TouchableOpacity>
                   </View>
-                </View>
-
-                {/* Hours Section */}
-                {restaurant.hours && typeof restaurant.hours === 'object' && (
-                  <View style={styles.section}>
-                    <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.sectionTitle}>
-                      Hours
-                    </CustomText>
-                    {Object.entries(restaurant.hours).map(([day, hours]) => (
-                      <View key={day} style={styles.hoursRow}>
-                        <CustomText variant="caption" weight="medium" fontFamily="figtree" style={styles.hoursDay}>
-                          {day}
-                        </CustomText>
-                        <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.hoursTime}>
-                          {hours as string}
-                        </CustomText>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                {/* Active Rewards Section */}
-                {restaurant.activeRewards && restaurant.activeRewards.length > 0 && (
-                  <View style={styles.section}>
-                    <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.sectionTitle}>
-                      Active Rewards
-                    </CustomText>
-                    {restaurant.activeRewards.map((reward: any, index: number) => (
-                      <View key={index} style={styles.rewardItem}>
-                        <CustomText variant="body" weight="medium" fontFamily="figtree" style={styles.rewardTitle}>
-                          {reward.title}
-                        </CustomText>
-                        <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.rewardDescription}>
-                          {reward.description}
-                        </CustomText>
-                        <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.rewardPunches}>
-                          {reward.punchesRequired} punches required
-                        </CustomText>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </ScrollView>
-
-              {/* Action Buttons */}
-              <View style={styles.actionButtons}>
-                <TouchableOpacity style={styles.actionButton}>
-                  <AntDesign name="star" size={18} color={COLORS.primary} />
-                  <CustomText variant="caption" weight="medium" fontFamily="figtree" style={styles.actionButtonText}>
-                    Add to Favorites
-                  </CustomText>
-                </TouchableOpacity>
-              </View>
-            </>
-          )}
+                </>
+              )}
             </View>
           </TouchableOpacity>
         </BlurView>

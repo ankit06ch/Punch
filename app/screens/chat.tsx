@@ -9,6 +9,7 @@ import {
   Platform,
   SafeAreaView,
   ActivityIndicator,
+  findNodeHandle,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,13 +21,16 @@ const ORANGE = '#fb7a20';
 
 export default function ChatScreen() {
   const router = useRouter();
-  const { conversationId, name } = useLocalSearchParams();
+  const { conversationId, name, focusMessageId } = useLocalSearchParams();
   const [conversation, setConversation] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [hasMarkedAsRead, setHasMarkedAsRead] = useState(false);
+  const scrollRef = useRef<ScrollView | null>(null);
+  const contentRef = useRef<View | null>(null);
+  const messageRefs = useRef<Record<string, View | null>>({});
 
   useEffect(() => {
     if (conversationId) {
@@ -40,6 +44,23 @@ export default function ChatScreen() {
       markMessagesAsRead();
     }
   }, [messages, hasMarkedAsRead]);
+
+  // Scroll to a focused message if provided via params
+  useEffect(() => {
+    if (!focusMessageId) return;
+    // Allow layout to settle
+    const timeout = setTimeout(() => {
+      const target = messageRefs.current[String(focusMessageId)];
+      const contentNode = contentRef.current ? findNodeHandle(contentRef.current) : null;
+      if (target && contentNode && scrollRef.current) {
+        // @ts-ignore measureLayout exists on native components
+        target.measureLayout(contentNode, (_x: number, y: number) => {
+          scrollRef.current?.scrollTo({ y: Math.max(y - 80, 0), animated: true });
+        }, () => {});
+      }
+    }, 150);
+    return () => clearTimeout(timeout);
+  }, [messages, focusMessageId]);
 
   // Mark messages as read when they come into view
   const handleMessageView = (message: any) => {
@@ -294,6 +315,7 @@ export default function ChatScreen() {
           style={styles.messagesContainer}
           contentContainerStyle={styles.messagesContent}
           showsVerticalScrollIndicator={false}
+          ref={scrollRef}
           onScroll={(event) => {
             // Mark messages as read when user scrolls to view them
             const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -309,6 +331,7 @@ export default function ChatScreen() {
           }}
           scrollEventThrottle={16}
         >
+          <View ref={contentRef}>
           {messages.map((msg, idx) => {
             const isOutgoing = msg.fromUserId === auth.currentUser?.uid;
             const isPuncho = msg.fromUserId === 'puncho_bot';
@@ -316,6 +339,7 @@ export default function ChatScreen() {
             
             return (
               <View
+                ref={(el) => { if (el) { messageRefs.current[msg.id] = el; } }}
                 key={msg.id || idx}
                 style={[
                   styles.messageBubble,
@@ -365,6 +389,7 @@ export default function ChatScreen() {
           {messages.length === 0 && (
             <Text style={styles.emptyText}>No messages yet.</Text>
           )}
+          </View>
         </ScrollView>
 
         {/* Input Bar */}

@@ -170,12 +170,12 @@ const profileStyles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 12,
-    paddingBottom: 40,
-    height: '45%', // Make the messages modal smaller
+    paddingBottom: 12,
+    height: '50%',
     position: 'absolute',
     left: 0,
     right: 0,
-    top: '55%', // Position it lower on the screen
+    top: '50%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.25,
@@ -183,12 +183,21 @@ const profileStyles = StyleSheet.create({
     elevation: 8,
   },
   messagesContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
   },
   modalHandle: {
     width: 40,
     height: 4,
     backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  messagesModalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#e0e0e0',
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: 16,
@@ -589,6 +598,11 @@ const profileStyles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  likedRestaurantLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   likedRestaurantInfo: {
     flex: 1,

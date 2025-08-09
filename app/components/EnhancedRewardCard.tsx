@@ -124,7 +124,15 @@ export default function EnhancedRewardCard({
             <View style={styles.header}>
               <View style={styles.iconContainer}>
                 <View style={[styles.iconBackground, { backgroundColor: reward.color }]}>
-                  <AntDesign name={reward.icon} size={24} color="white" />
+                  {reward.logoUrl ? (
+                    <Animated.Image
+                      source={{ uri: reward.logoUrl }}
+                      style={{ width: 40, height: 40, borderRadius: 20 }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <AntDesign name={reward.icon || 'star'} size={24} color="white" />
+                  )}
                 </View>
                 {isAvailable && (
                   <View style={[styles.availableIndicator, { backgroundColor: reward.color }]}>

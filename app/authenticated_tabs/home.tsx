@@ -257,8 +257,10 @@ export default function Home() {
     })
     .map(card => ({
       ...card,
-      punches: Math.floor(Math.random() * ((card.total || 10) - 1 + 1)) + 1,
-      total: card.total || 10,
+      businessName: (card as any).businessName || (card as any).name || 'Business',
+      punches: Math.floor(Math.random() * (((card as any).total || 10) - 1 + 1)) + 1,
+      total: (card as any).total || 10,
+      logo: (card as any).logoUrl ? { uri: (card as any).logoUrl } : undefined,
     }))
     .filter(card => card.punches > 0); // Only show cards that have punches
 
@@ -266,8 +268,10 @@ export default function Home() {
   if (favoriteCards.length === 0 && restaurants.length > 0) {
     favoriteCards = restaurants.slice(0, 4).map(card => ({
       ...card,
-      punches: Math.floor(Math.random() * ((card.total || 10) - 1 + 1)) + 1,
-      total: card.total || 10,
+      businessName: (card as any).businessName || (card as any).name || 'Business',
+      punches: Math.floor(Math.random() * (((card as any).total || 10) - 1 + 1)) + 1,
+      total: (card as any).total || 10,
+      logo: (card as any).logoUrl ? { uri: (card as any).logoUrl } : undefined,
     }));
   }
 
@@ -322,7 +326,8 @@ export default function Home() {
       description: rewardType.description,
       progress: testProgress,
       required: rewardType.required,
-      isAvailable: testProgress >= rewardType.required
+      isAvailable: testProgress >= rewardType.required,
+      logoUrl: (restaurant as any).logoUrl,
     };
   });
 

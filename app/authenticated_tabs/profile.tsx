@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, ScrollView, FlatList, Share, Animated, TextInput, Dimensions, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, ScrollView, FlatList, Share, Animated, TextInput, Dimensions, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, RefreshControl, Keyboard } from 'react-native';
 import { Ionicons, Feather, AntDesign } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, query, where, orderBy, onSnapshot, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
@@ -9,7 +9,7 @@ import profileStyles from '../styles/profileStyles';
 import { PanResponder } from 'react-native';
 import RestaurantModal from '../../components/RestaurantModal';
 import * as Haptics from 'expo-haptics';
-import { pickProfilePicture, uploadProfilePicture } from '../../utils/profilePictureUtils';
+import { pickProfilePicture, uploadProfilePicture, deleteProfilePicture } from '../../utils/profilePictureUtils';
 import {
   useFonts,
   Figtree_300Light,
@@ -60,6 +60,72 @@ export default function Profile() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadMessages, setUnreadMessages] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [allUserMessages, setAllUserMessages] = useState<any[]>([]);
+  const [showNewChatSearch, setShowNewChatSearch] = useState(false);
+  const [newChatQuery, setNewChatQuery] = useState('');
+  const [showMessageSearch, setShowMessageSearch] = useState(false);
+  const [messageSearchQuery, setMessageSearchQuery] = useState('');
+  const [newUserResults, setNewUserResults] = useState<any[]>([]);
+
+  // Search for new users (exclude current conversations and self)
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!showNewChatSearch) return;
+      const term = newChatQuery.trim().toLowerCase();
+      if (term.length < 2) { setNewUserResults([]); return; }
+      try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('username', '>=', term), where('username', '<=', term + '\uf8ff'));
+        const snapshot = await getDocs(q);
+        if (cancelled) return;
+        const existingIds = new Set(getConversations().map((c: any) => c.id));
+        const results = snapshot.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(u => u.id !== auth.currentUser?.uid && !existingIds.has(u.id));
+        setNewUserResults(results);
+      } catch (e) {
+        console.error('New chat search error:', e);
+        if (!cancelled) setNewUserResults([]);
+      }
+    };
+    const t = setTimeout(run, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [showNewChatSearch, newChatQuery]);
+  
+  // Lift the messages preview modal when the keyboard opens during searches
+  useEffect(() => {
+    const onShow = (e: any) => {
+      if (!(showNewChatSearch || showMessageSearch)) return;
+      const targetShift = -Math.round((containerLayout?.height || screenHeight) * 0.3);
+      Animated.timing(messagesKeyboardShift, {
+        toValue: targetShift,
+        duration: Platform.OS === 'ios' ? 220 : 0,
+        useNativeDriver: true,
+      }).start();
+    };
+    const onHide = () => {
+      Animated.timing(messagesKeyboardShift, {
+        toValue: 0,
+        duration: Platform.OS === 'ios' ? 200 : 0,
+        useNativeDriver: true,
+      }).start();
+    };
+    const subShow = Platform.select({
+      ios: Keyboard.addListener('keyboardWillShow', onShow),
+      default: Keyboard.addListener('keyboardDidShow', onShow),
+    });
+    const subHide = Platform.select({
+      ios: Keyboard.addListener('keyboardWillHide', onHide),
+      default: Keyboard.addListener('keyboardDidHide', onHide),
+    });
+    return () => {
+      // @ts-ignore
+      subShow?.remove?.();
+      // @ts-ignore
+      subHide?.remove?.();
+    };
+  }, [showNewChatSearch, showMessageSearch]);
   const [hasSeenPunchoIntro, setHasSeenPunchoIntro] = useState(false);
   const animationValue = useRef(new Animated.Value(0)).current;
   const screenWidth = Dimensions.get('window').width;
@@ -92,6 +158,7 @@ export default function Profile() {
   // Drag-to-dismiss animations
   const menuModalTranslateY = useRef(new Animated.Value(0)).current;
   const messagesModalTranslateY = useRef(new Animated.Value(0)).current;
+  const messagesKeyboardShift = useRef(new Animated.Value(0)).current;
   
   // Edit Profile state
   const [editProfileData, setEditProfileData] = useState({
@@ -329,6 +396,30 @@ export default function Profile() {
     return () => unsubscribe();
   }, []);
 
+  // Listen for all messages involving current user (both directions) to derive last message previews
+  useEffect(() => {
+    const current = auth.currentUser;
+    if (!current) return;
+    const messagesRef = collection(db, 'messages');
+    const qFrom = query(messagesRef, where('fromUserId', '==', current.uid));
+    const qTo = query(messagesRef, where('toUserId', '==', current.uid));
+    const unsubFrom = onSnapshot(qFrom, (snap) => {
+      const fromMsgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setAllUserMessages(prev => {
+        const others = prev.filter(m => m.fromUserId !== current.uid);
+        return [...others, ...fromMsgs].sort((a: any, b: any) => (b.timestamp?.toDate?.() || 0) - (a.timestamp?.toDate?.() || 0));
+      });
+    });
+    const unsubTo = onSnapshot(qTo, (snap) => {
+      const toMsgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setAllUserMessages(prev => {
+        const others = prev.filter(m => m.toUserId !== current.uid);
+        return [...others, ...toMsgs].sort((a: any, b: any) => (b.timestamp?.toDate?.() || 0) - (a.timestamp?.toDate?.() || 0));
+      });
+    });
+    return () => { unsubFrom(); unsubTo(); };
+  }, []);
+
   // Calculate total unread count (notifications + messages)
   useEffect(() => {
     const unreadNotifications = notifications.filter((n: any) => 
@@ -395,6 +486,26 @@ export default function Profile() {
     setLiked(likedRestaurantIds);
   };
 
+  // Expose a reusable fetch function for refreshers and other effects
+  const fetchUserData = async (): Promise<void> => {
+    const user = auth.currentUser;
+    if (!user) return;
+    try {
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data() as any;
+        setUserData(data);
+        if (data.privacySettings) {
+          setPrivacySettings(data.privacySettings);
+        }
+        setHasSeenPunchoIntro(data.hasSeenPunchoIntro || false);
+        await fetchLikedRestaurantsWithNames(data.likedRestaurants || []);
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    }
+  };
+
   const handleRestaurantPress = (restaurant: any) => {
     setSelectedRestaurant(restaurant);
     setRestaurantModalVisible(true);
@@ -421,7 +532,7 @@ export default function Profile() {
           await updateDoc(userRef, {
             likedRestaurants: arrayRemove(restaurantId)
           });
-          setLiked(currentLiked.filter(id => id !== restaurantId));
+          setLiked(currentLiked.filter((id: string) => id !== restaurantId));
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         } else {
           await updateDoc(userRef, {
@@ -750,6 +861,16 @@ export default function Profile() {
         const user = auth.currentUser;
         if (!user) return;
 
+        // Delete previous storage object if it exists
+        try {
+          if (userData?.profilePictureUrl) {
+            await deleteProfilePicture(user.uid);
+          }
+        } catch (e) {
+          // Non-fatal: continue to upload
+          console.warn('Previous profile picture delete skipped:', e);
+        }
+
         const profilePictureUrl = await uploadProfilePicture(user.uid, result.uri);
         if (profilePictureUrl) {
           await updateDoc(doc(db, 'users', user.uid), {
@@ -847,23 +968,22 @@ export default function Profile() {
     }
     // Friend conversations
     friends.forEach(friend => {
-      // Check for unread messages from this friend
-      const friendUnreadMessages = unreadMessages.filter(msg => msg.fromUserId === friend.id);
-      const hasUnreadMessages = friendUnreadMessages.length > 0;
-      
-      // Get the last message from this friend (if any)
-      const lastMessage = friendUnreadMessages.length > 0 
-        ? friendUnreadMessages[0] 
-        : null;
-      
+      const current = auth.currentUser;
+      const chatId = [current?.uid, friend.id].sort().join('_');
+      const convMessages = allUserMessages
+        .filter((m: any) => m.chatId === chatId)
+        .sort((a: any, b: any) => (b.timestamp?.toDate?.() || 0) - (a.timestamp?.toDate?.() || 0));
+      const lastMsg = convMessages[0];
+      const hasUnreadMessages = unreadMessages.some(msg => msg.fromUserId === friend.id);
+
       conversations.push({
         id: friend.id,
         name: friend.name,
         username: friend.username,
         avatar: null,
-        lastMessage: lastMessage ? lastMessage.message : 'Tap to start a conversation',
-        lastTime: lastMessage ? new Date(lastMessage.timestamp.toDate ? lastMessage.timestamp.toDate() : lastMessage.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
-        messages: friendUnreadMessages,
+        lastMessage: lastMsg ? lastMsg.message : 'Tap to start a conversation',
+        lastTime: lastMsg ? new Date(lastMsg.timestamp?.toDate ? lastMsg.timestamp.toDate() : lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+        messages: convMessages,
         unread: hasUnreadMessages
       });
     });
@@ -1000,17 +1120,21 @@ export default function Profile() {
 
   // Calculate actual following count (excluding pending requests)
   const actualFollowingCount = useMemo(() => {
-    if (!userData?.followingUids || !userData?.pendingFollowRequests) {
-      return userData?.followingCount || 0;
-    }
-    
-    // Count only accepted follows (followingUids minus pendingFollowRequests)
-    const acceptedFollows = userData.followingUids.filter((uid: string) => 
-      !userData.pendingFollowRequests.includes(uid)
-    );
-    
-    return acceptedFollows.length;
-  }, [userData?.followingUids, userData?.pendingFollowRequests, userData?.followingCount]);
+    const followingUids: string[] = userData?.followingUids || [];
+    const pending: string[] = userData?.pendingFollowRequests || [];
+    if (!followingUids.length) return 0;
+    // Exclude pending requests if your schema stores outgoing requests on the current user
+    const accepted = pending.length
+      ? followingUids.filter((uid: string) => !pending.includes(uid))
+      : followingUids;
+    return accepted.length;
+  }, [userData?.followingUids, userData?.pendingFollowRequests]);
+
+  // Calculate followers based on followerUids to avoid stale numeric counters
+  const actualFollowersCount = useMemo(() => {
+    const followerUids: string[] = userData?.followerUids || [];
+    return followerUids.length;
+  }, [userData?.followerUids]);
 
   // Don't render until fonts are loaded
   if (!fontsLoaded) {
@@ -1135,7 +1259,7 @@ export default function Profile() {
           {/* Followers, Following, Stores Visited in order, all clickable */}
           <View style={styles.statsContainer}>
             <TouchableOpacity style={styles.statItem} onPress={() => router.push(`/screens/followers?userId=${userData.id || auth.currentUser?.uid}`)}>
-              <Text style={styles.statNumber}>{userData.followersCount || 0}</Text>
+              <Text style={styles.statNumber}>{actualFollowersCount}</Text>
               <Text style={styles.statLabel}>Followers</Text>
             </TouchableOpacity>
             
@@ -1229,7 +1353,14 @@ export default function Profile() {
                 >
                   <View style={profileStyles.likedRestaurantContent}>
                     <View style={profileStyles.likedRestaurantIcon}>
-                      <AntDesign name="heart" size={20} color="#FF6B6B" />
+                      {restaurant.logoUrl ? (
+                        <Image
+                          source={{ uri: restaurant.logoUrl }}
+                          style={profileStyles.likedRestaurantLogo}
+                        />
+                      ) : (
+                        <AntDesign name="star" size={20} color="#FF6B6B" />
+                      )}
                     </View>
                     <View style={profileStyles.likedRestaurantInfo}>
                       <Text style={profileStyles.likedRestaurantName}>{restaurant.name}</Text>
@@ -1560,23 +1691,142 @@ export default function Profile() {
           <Animated.View
             style={[
               profileStyles.messagesModalContent,
-              { transform: [{ translateY: messagesModalTranslateY }] },
+              { transform: [{ translateY: Animated.add(messagesModalTranslateY, messagesKeyboardShift) }] },
             ]}
-            {...messagesModalPanResponder.panHandlers}
           >
-            <View style={profileStyles.modalHandle} />
+            <View {...messagesModalPanResponder.panHandlers}>
+              <View style={profileStyles.messagesModalHandle} />
+            </View>
             <Text style={[profileStyles.modalTitle, { color: '#fb7a20' }]}>Messages</Text>
-            <TouchableOpacity style={profileStyles.newChatButton} onPress={() => {/* TODO: open new chat UI */}}>
-              <Ionicons name="add-circle-outline" size={22} color="#fb7a20" style={{ marginRight: 6 }} />
-              <Text style={profileStyles.newChatButtonText}>Start New Chat</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16 }}>
+              {!(showNewChatSearch || showMessageSearch) ? (
+                <>
+                  <TouchableOpacity 
+                    style={profileStyles.newChatButton} 
+                    onPress={() => { setShowNewChatSearch(true); setShowMessageSearch(false); setMessageSearchQuery(''); }}
+                  >
+                    <Ionicons name={'add-circle-outline'} size={22} color="#fb7a20" style={{ marginRight: 6 }} />
+                    <Text style={profileStyles.newChatButtonText}>Start New Chat</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => { setShowMessageSearch(true); setShowNewChatSearch(false); setNewChatQuery(''); }} style={{ padding: 8, marginLeft: 'auto' }}>
+                    <Ionicons name={'search'} size={22} color="#fb7a20" />
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <View style={{ flex: 1, alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff6ee', borderRadius: 12, borderWidth: 1, borderColor: '#fb7a20', paddingHorizontal: 12, paddingVertical: 8, marginBottom: 12 }}>
+                  <Ionicons name="search" size={18} color="#fb7a20" />
+                  <TextInput
+                    style={{ flex: 1, marginLeft: 8, color: '#222' }}
+                    placeholder={showNewChatSearch ? 'Search new users by username' : 'Search messages'}
+                    placeholderTextColor="#fb7a20"
+                    value={showNewChatSearch ? newChatQuery : messageSearchQuery}
+                    onChangeText={(text) => (showNewChatSearch ? setNewChatQuery(text) : setMessageSearchQuery(text))}
+                    autoFocus
+                  />
+                  {(showNewChatSearch ? newChatQuery.length > 0 : messageSearchQuery.length > 0) && (
+                    <TouchableOpacity onPress={() => (showNewChatSearch ? setNewChatQuery('') : setMessageSearchQuery(''))}>
+                      <Ionicons name="close-circle" size={18} color="#fb7a20" />
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    onPress={() => { 
+                      setShowNewChatSearch(false); 
+                      setShowMessageSearch(false); 
+                      setNewChatQuery(''); 
+                      setMessageSearchQuery(''); 
+                      Keyboard.dismiss();
+                    }}
+                    style={{ marginLeft: 8 }}
+                  >
+                    <Ionicons name="close" size={18} color="#fb7a20" />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+            {showNewChatSearch && (
+              <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+                {/* New users search results (exclude existing conversations and self) */}
+                <FlatList
+                  data={newUserResults}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }}
+                      onPress={() => {
+                        setShowNewChatSearch(false);
+                        setNewChatQuery('');
+                        openChat({ id: item.id, name: item.name, username: item.username, messages: [], unread: false });
+                      }}
+                    >
+                      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#fff6ee', justifyContent: 'center', alignItems: 'center', marginRight: 10, borderWidth: 2, borderColor: '#fb7a20' }}>
+                        <Text style={{ fontSize: 20 }}>🤖</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: '#222', fontWeight: '600' }}>{item.name || '@' + item.username}</Text>
+                        {item.username && <Text style={{ color: '#999', fontSize: 12 }}>@{item.username}</Text>}
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color="#bbb" />
+                    </TouchableOpacity>
+                  )}
+                  ListEmptyComponent={newChatQuery ? (
+                    <Text style={{ color: '#888', textAlign: 'center', marginTop: 8 }}>No users found</Text>
+                  ) : null}
+                  style={{ maxHeight: 280, marginTop: 8 }}
+                  showsVerticalScrollIndicator={true}
+                  keyboardShouldPersistTaps="handled"
+                />
+                {/* Search within messages for quick jump */}
+                {showMessageSearch && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={{ color: '#999', fontSize: 12, marginTop: 6, marginBottom: 6 }}>Messages matching “{messageSearchQuery.trim()}”</Text>
+                    <FlatList
+                      data={getConversations()
+                        .flatMap(c => (c.messages || []).map((m: any) => ({ conv: c, msg: m })))
+                        .filter(({ msg }) => String(msg.message || '').toLowerCase().includes(messageSearchQuery.trim().toLowerCase()))
+                        .slice(0, 10)
+                      }
+                      keyExtractor={({ msg }) => msg.id}
+                      renderItem={({ item }) => (
+                        <TouchableOpacity
+                          style={{ paddingVertical: 8 }}
+                          onPress={() => {
+                            setShowNewChatSearch(false);
+                            setNewChatQuery('');
+                            setShowMessageSearch(false);
+                            setMessageSearchQuery('');
+                            // Navigate to chat and focus the message
+                            router.push(`/screens/chat?conversationId=${item.conv.id}&name=${encodeURIComponent(item.conv.name || '')}&focusMessageId=${encodeURIComponent(item.msg.id)}`);
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#fff6ee', justifyContent: 'center', alignItems: 'center', marginRight: 10, borderWidth: 2, borderColor: '#fb7a20' }}>
+                              <Text style={{ fontSize: 20 }}>🤖</Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ color: '#fb7a20', fontWeight: '700' }} numberOfLines={1}>{item.conv.name || 'Conversation'}</Text>
+                              <Text style={{ color: '#222' }} numberOfLines={1}>{item.msg.message}</Text>
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      )}
+                      ListEmptyComponent={null}
+                      showsVerticalScrollIndicator={false}
+                      style={{ maxHeight: 280 }}
+                      keyboardShouldPersistTaps="handled"
+                    />
+                  </View>
+                )}
+              </View>
+            )}
             <View style={[profileStyles.messagesContent, {paddingHorizontal: 0}]}> 
               <FlatList
                 data={getConversations()}
                 keyExtractor={item => item.id}
                 renderItem={renderConversation}
                 showsVerticalScrollIndicator={true}
-                contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16 }}
+                contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingBottom: 120 }}
+                ListFooterComponent={<View style={{ height: 32 }} />}
+                keyboardShouldPersistTaps="handled"
                 ListEmptyComponent={<Text style={{ color: '#888', textAlign: 'center', marginTop: 40 }}>No conversations yet. Messages from Puncho and friends will appear here.</Text>}
               />
             </View>
