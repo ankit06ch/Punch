@@ -1814,7 +1814,13 @@ export default function Profile() {
             )}
             <View style={[profileStyles.messagesContent, {paddingHorizontal: 0}]}> 
               <FlatList
-                data={getConversations()}
+                data={
+                  (showMessageSearch && messageSearchQuery.trim().length > 0)
+                    ? getConversations().filter((c: any) =>
+                        (c.messages || []).some((m: any) => String(m.message || '').toLowerCase().includes(messageSearchQuery.trim().toLowerCase()))
+                      )
+                    : getConversations()
+                }
                 keyExtractor={item => item.id}
                 renderItem={renderConversation}
                 showsVerticalScrollIndicator={true}
