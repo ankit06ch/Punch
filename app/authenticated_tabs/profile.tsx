@@ -1835,7 +1835,7 @@ export default function Profile() {
                     <View style={profileStyles.conversationAvatar}>
                       <Ionicons name="person-circle" size={40} color="#bbb" />
                       {!!(item as any).username && (
-                        <Text style={{ position: 'absolute', bottom: -14, fontSize: 11, color: '#999' }}>@{(item as any).username}</Text>
+                        <Text style={{ position: 'absolute', bottom: -14, fontSize: 11, color: '#B0B0B0' }}>@{(item as any).username}</Text>
                       )}
                     </View>
                     <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
