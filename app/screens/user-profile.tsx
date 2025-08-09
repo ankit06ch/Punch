@@ -35,6 +35,13 @@ export default function UserProfileScreen() {
   const [followButtonLoading, setFollowButtonLoading] = useState(false);
   const currentUser = auth.currentUser;
 
+  // If not authenticated, redirect to login instead of showing profile
+  useEffect(() => {
+    if (!auth.currentUser) {
+      router.replace('/unauthenticated_tabs/login');
+    }
+  }, []);
+
   useEffect(() => {
     const fetchUser = async () => {
       setLoading(true);
@@ -266,6 +273,17 @@ export default function UserProfileScreen() {
     if (followRequestSent) return styles.requestSentButton;
     return styles.followButton;
   };
+
+  if (!auth.currentUser) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={ORANGE} />
+          <Text style={styles.loadingText}>Redirecting to login...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (loading) {
     return (
