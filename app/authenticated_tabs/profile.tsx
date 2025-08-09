@@ -1816,13 +1816,47 @@ export default function Profile() {
               <FlatList
                 data={
                   (showMessageSearch && messageSearchQuery.trim().length > 0)
-                    ? getConversations().filter((c: any) =>
-                        (c.messages || []).some((m: any) => String(m.message || '').toLowerCase().includes(messageSearchQuery.trim().toLowerCase()))
-                      )
+                    ? getConversations().filter((c: any) => {
+                        const term = messageSearchQuery.trim().toLowerCase();
+                        const nameMatch = (c.name || '').toLowerCase().includes(term);
+                        const tagMatch = ('@' + (c.username || '')).toLowerCase().includes(term);
+                        const messageMatch = (c.messages || []).some((m: any) => String(m.message || '').toLowerCase().includes(term));
+                        return nameMatch || tagMatch || messageMatch;
+                      })
                     : getConversations()
                 }
                 keyExtractor={item => item.id}
-                renderItem={renderConversation}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={profileStyles.conversationPreview}
+                    onPress={() => openChat(item)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={profileStyles.conversationAvatar}>
+                      <Ionicons name="person-circle" size={40} color="#bbb" />
+                      {!!(item as any).username && (
+                        <Text style={{ position: 'absolute', bottom: -14, fontSize: 11, color: '#999' }}>@{(item as any).username}</Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text
+                          style={[profileStyles.conversationName, item.id === 'puncho_bot' ? { color: '#fb7a20' } : { color: '#222' }]}
+                          numberOfLines={1}
+                        >
+                          {item.name || '@' + ((item as any).username || '')}
+                        </Text>
+                        {item.lastTime ? (
+                          <Text style={profileStyles.conversationLastTime}>{item.lastTime}</Text>
+                        ) : null}
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                        <Text style={profileStyles.conversationLastMessage} numberOfLines={2}>{String(item.lastMessage || '')}</Text>
+                        {item.unread && <View style={profileStyles.unreadDotSmall} />}
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                )}
                 showsVerticalScrollIndicator={true}
                 contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingBottom: 120 }}
                 ListFooterComponent={<View style={{ height: 32 }} />}
