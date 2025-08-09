@@ -725,9 +725,8 @@ export default function Profile() {
 
   const handleShare = async () => {
     try {
-      // Use a more realistic deep link format
-      const profileUrl = `punch://profile/${userData.username}`;
-      const webUrl = `https://punchapp.com/profile/${userData.username}`;
+      // Universal link for profile deep linking
+      const webUrl = `https://punchrewards.app/screens/user-profile?userId=${userData.id || auth.currentUser?.uid}`;
       
       const result = await Share.share({
         title: `${userData.username}'s Punch Profile`,
