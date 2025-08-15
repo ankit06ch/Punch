@@ -1,208 +1,50 @@
-import { useState, useRef, useEffect } from 'react';
-import { View, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Animated, Easing, Keyboard, TouchableWithoutFeedback, Switch, KeyboardAvoidingView, Platform, Linking, Dimensions, LogBox, Alert } from 'react-native';
-// Custom Checkbox
-function CustomCheckbox({ value, onValueChange }: { value: boolean; onValueChange: (v: boolean) => void }) {
-  return (
-    <TouchableOpacity
-      onPress={() => onValueChange(!value)}
-      style={{
-        width: 22,
-        height: 22,
-        borderRadius: 6,
-        borderWidth: 2,
-        borderColor: value ? '#FB7A20' : '#ccc',
-        backgroundColor: value ? '#FB7A20' : '#fff',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: value }}
-    >
-      {value && <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#fff' }} />}
-    </TouchableOpacity>
-  );
-}
-import { auth, db } from '../../firebase/config';
 import { useRouter } from 'expo-router';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { setDoc, doc, getDocs, collection, query, where } from 'firebase/firestore';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import CustomText from '../../components/CustomText';
-import { AntDesign } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import onboardingStyles from '../styles/onboardingStyles';
-import Svg, { Path, Circle, G } from 'react-native-svg';
-import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
-import { KeyboardEvent } from 'react-native';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { useRef, useState, useEffect } from 'react';
+import { Animated, Easing, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, View, Dimensions, Keyboard, KeyboardEvent, Linking } from 'react-native';
+import * as Haptics from 'expo-haptics';
+
+import { auth, db } from '../../firebase/config';
+import { setDoc, doc, query, collection, where, getDocs } from 'firebase/firestore';
 import { pickProfilePicture, uploadProfilePicture } from '../../utils/profilePictureUtils';
-
-const { width } = Dimensions.get('window');
-const MODAL_WIDTH = width - 48;
-const MODAL_HEIGHT = 420;
-
-function CircularProgressWithLogo({ progress }: { progress: number }) {
-  const size = 120;
-  const strokeWidth = 6;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const animatedStroke = circumference * (1 - progress);
-  return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', marginBottom: 32 }}>
-      <View style={{ position: 'relative', width: size, height: size }}>
-        <Svg width={size} height={size}>
-          <Circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke={'rgba(255,255,255,0.25)'}
-            strokeWidth={strokeWidth}
-            fill="none"
-          />
-          <Path
-            stroke="#FB7A20"
-            strokeWidth={strokeWidth}
-            fill="none"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={animatedStroke}
-            d={`M${size / 2},${size / 2} m0,-${radius} a${radius},${radius} 0 1,1 0,${2 * radius} a${radius},${radius} 0 1,1 0,-${2 * radius}`}
-          />
-        </Svg>
-        <View style={{
-          position: 'absolute',
-          left: size / 2 - 40,
-          top: size / 2 - 40,
-          width: 80,
-          height: 80,
-          borderRadius: 40,
-          backgroundColor: 'white',
-          alignItems: 'center',
-          justifyContent: 'center',
-          alignSelf: 'center',
-        }}>
-                      <View style={{
-              width: 60,
-              height: 60,
-              borderRadius: 30,
-              backgroundColor: '#FFFFFF',
-              justifyContent: 'center',
-              alignItems: 'center',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.12,
-              shadowRadius: 12,
-              elevation: 6,
-              marginTop: 5,
-              position: 'relative',
-            }}>
-              <Image 
-                source={require('../../assets/icon.png')} 
-                style={{ 
-                  width: 44, 
-                  height: 44, 
-                  resizeMode: 'contain',
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: [{ translateX: -22 }, { translateY: -22 }],
-                }} 
-              />
-            </View>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-// Update the password step prompt
-const steps = [
-  {
-    key: 'name',
-    prompt: "First things first, what's your name?",
-    placeholder: 'Your full name',
-    icon: 'user',
-    validate: (val: string) => val.trim().length > 1 || 'Please enter your name.',
-  },
-  {
-    key: 'profilePicture',
-    prompt: "Add a profile picture (optional)",
-    icon: 'camera',
-    validate: () => true, // Always valid since it's optional
-  },
-  {
-    key: 'contact',
-    prompt: "How can we reach you?",
-    icon: 'mail',
-    validate: (val: string, form?: { name: string; email: string; phone: string; password: string }) => {
-      if (!form?.email || !/.+@.+\..+/.test(form.email)) return 'Please enter a valid email.';
-      // phone is optional
-      return true;
-    },
-  },
-  {
-    key: 'password',
-    prompt: "Finally, set a password to keep your account safe.",
-    placeholder: 'Password',
-    icon: 'lock',
-    secure: true,
-    validate: (val: string) => val.length >= 6 || 'Password should be at least 6 characters.',
-  },
-];
-
-function formatPhoneNumber(value: string) {
-  const digits = value.replace(/\D/g, '').slice(0, 10);
-  const parts = [];
-  if (digits.length > 0) parts.push(digits.slice(0, 3));
-  if (digits.length > 3) parts.push(digits.slice(3, 6));
-  if (digits.length > 6) parts.push(digits.slice(6, 10));
-  return parts.join('-');
-}
-
-function getFriendlyErrorMessage(errorCode: string) {
-  switch (errorCode) {
-    case 'auth/email-already-in-use':
-      return 'This email is already in use. Please try logging in.';
-    case 'auth/invalid-email':
-      return 'The email address is not valid.';
-    case 'auth/weak-password':
-      return 'Password should be at least 6 characters.';
-    default:
-      return 'Something went wrong. Please try again.';
-  }
-}
+import AccountTypeSelection from '../components/AccountTypeSelection';
+import SignupForm from '../components/SignupForm';
+import SignupNavigation from '../components/SignupNavigation';
+import SignupBackground from '../components/SignupBackground';
+import CustomText from '../../components/CustomText';
+import loginStyles from '../styles/loginStyles';
 
 export default function SignupScreen() {
-  // Suppress React Native text warning
-  useEffect(() => {
-    // Suppress the specific warning using LogBox
-    LogBox.ignoreLogs(['Text strings must be rendered within a <Text> component']);
-    
-    const originalConsoleError = console.error;
-    const originalConsoleWarn = console.warn;
-    
-    console.error = (...args) => {
-      if (args[0] && typeof args[0] === 'string' && args[0].includes('Text strings must be rendered within a <Text> component')) {
-        return; // Suppress this specific warning
-      }
-      originalConsoleError.apply(console, args);
-    };
-    
-    console.warn = (...args) => {
-      if (args[0] && typeof args[0] === 'string' && args[0].includes('Text strings must be rendered within a <Text> component')) {
-        return; // Suppress this specific warning
-      }
-      originalConsoleWarn.apply(console, args);
-    };
-    
-    return () => {
-      console.error = originalConsoleError;
-      console.warn = originalConsoleWarn;
-    };
-  }, []);
   const router = useRouter();
   const [step, setStep] = useState<number>(0);
-  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
+  const [isBusiness, setIsBusiness] = useState<boolean | null>(null);
+  const [form, setForm] = useState({ 
+    name: '', 
+    email: '', 
+    phone: '', 
+    password: '',
+    businessName: '',
+    cuisine: [] as string[],
+    customCuisine: '',
+    pricing: '',
+    address: '',
+    hours: {
+      monday: { isOpen: true, slots: [{ open: '09:00', close: '17:00' }] },
+      tuesday: { isOpen: true, slots: [{ open: '09:00', close: '17:00' }] },
+      wednesday: { isOpen: true, slots: [{ open: '09:00', close: '17:00' }] },
+      thursday: { isOpen: true, slots: [{ open: '09:00', close: '17:00' }] },
+      friday: { isOpen: true, slots: [{ open: '09:00', close: '17:00' }] },
+      saturday: { isOpen: true, slots: [{ open: '09:00', close: '17:00' }] },
+      sunday: { isOpen: true, slots: [{ open: '09:00', close: '17:00' }] },
+    },
+    logo: null as string | null,
+  });
   const [mode, setMode] = useState<'email' | 'phone'>('email');
+  
+  // Debug mode changes
+  useEffect(() => {
+    console.log('Mode changed to:', mode);
+  }, [mode]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [agree, setAgree] = useState(false);
@@ -210,14 +52,274 @@ export default function SignupScreen() {
   const [notifText, setNotifText] = useState(false);
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const [uploadingPicture, setUploadingPicture] = useState(false);
-  // Remove modalVisible state and logic
-  // Remove the setTimeout for modalVisible in useEffect
-  // Always render the modal when SignupScreen is mounted
+  const [showPassword, setShowPassword] = useState(false);
+  const [isKeyboardDismissing, setIsKeyboardDismissing] = useState(false);
+  const [showMoreCuisine, setShowMoreCuisine] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
+  const [emailExists, setEmailExists] = useState(false);
+  const [phoneExists, setPhoneExists] = useState(false);
+  const [showLoadingScreen, setShowLoadingScreen] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
+
+
+  const { width, height } = Dimensions.get('window');
+
+  // Safety check for dimensions
+  const safeHeight = height && !isNaN(height) && isFinite(height) ? height : 800;
+  const safeWidth = width && !isNaN(width) && isFinite(width) ? width : 400;
+  
+  const MODAL_HEIGHT = 420;
   const modalAnim = useRef(new Animated.Value(MODAL_HEIGHT + 80)).current;
-  const keyboardOffset = 80; // how much to move modal up when keyboard is open
+  
+  // Entrance animations for fly-in effects
+  const orangeBackgroundAnim = useRef(new Animated.Value(200)).current;
+  const welcomeModalAnim = useRef(new Animated.Value(300)).current;
+  const logoSizeAnim = useRef(new Animated.Value(1)).current;
+  const pulsateAnim = useRef(new Animated.Value(1)).current;
+  
+  // Ensure all animation values are valid numbers
+  useEffect(() => {
+    // Reset any potentially corrupted animation values
+    orangeBackgroundAnim.setValue(200);
+    welcomeModalAnim.setValue(300);
+    logoSizeAnim.setValue(1);
+    pulsateAnim.setValue(1);
+  }, []);
+
+  // Loading messages for the loading screen
+  const loadingMessages = [
+    "Warming up the gloves… 🥊",
+    "Wrapping your hands for the big fight…",
+    "Getting in your corner…",
+    "Bouncing on our toes…",
+    "Loading punches… please dodge.",
+    "Sharpening the one-two combo…"
+  ];
+
+
+
+  // Cuisine options
+  const cuisineOptions = [
+    'American', 'Bar', 'BBQ', 'Bakery', 'Breakfast', 'Brunch', 'Burgers', 'Cafe',
+    'Chinese', 'Indian', 'Italian', 'Japanese', 'Korean', 'Mexican', 'Thai',
+    'Vegan', 'Vegetarian', 'Mediterranean', 'Middle Eastern', 'French', 'Greek',
+    'Spanish', 'Vietnamese', 'Korean BBQ', 'Sushi', 'Pizza', 'Steakhouse',
+    'Seafood', 'Deli', 'Food Truck', 'Fine Dining', 'Fast Food', 'Dessert',
+    'Coffee Shop', 'Tea House', 'Wine Bar', 'Cocktail Bar', 'Brewery'
+  ];
+
+  // Step definitions
+  const businessSteps = [
+    { key: 'contact', prompt: "How can we reach you?", icon: 'mail' },
+    { key: 'password', prompt: "Create a password", icon: 'lock' },
+    { key: 'name', prompt: "What's your name?", placeholder: 'Your full name', icon: 'user' },
+    { key: 'businessName', prompt: "What's your business name?", placeholder: 'Sushi Town', icon: 'home' },
+    { key: 'cuisine', prompt: "What type of cuisine do you serve?", icon: 'tag' },
+    { key: 'pricing', prompt: "What's your average price per person?", placeholder: '50 or 50$', icon: 'tag' },
+    { key: 'address', prompt: "Where is your business located?", placeholder: '123 Main St, San Francisco, CA', icon: 'enviroment' },
+    { key: 'hours', prompt: "What are your operating hours?", icon: 'clockcircle' },
+    { key: 'logo', prompt: "Upload your business logo", icon: 'picture' },
+  ];
+
+  const personalSteps = [
+    { key: 'contact', prompt: "How can we reach you?", icon: 'mail' },
+    { key: 'password', prompt: "Create a password", icon: 'lock' },
+    { key: 'name', prompt: "What's your name?", placeholder: 'Your full name', icon: 'user' },
+    { key: 'profilePicture', prompt: "Add a profile picture (optional)", icon: 'camera' },
+  ];
+
+  const getCurrentSteps = () => {
+    if (isBusiness === null) return [];
+    return isBusiness ? businessSteps : personalSteps;
+  };
+
+  const steps = getCurrentSteps();
+  console.log('Steps array:', steps);
+  console.log('Current step:', step);
+
+  function formatPhoneNumber(value: string) {
+    const digits = value.replace(/\D/g, '').slice(0, 10);
+    const parts = [];
+    if (digits.length > 0) parts.push(digits.slice(0, 3));
+    if (digits.length > 3) parts.push(digits.slice(3, 6));
+    if (digits.length > 6) parts.push(digits.slice(6, 10));
+    return parts.join('-');
+  }
+
+  function getFriendlyErrorMessage(errorCode: string) {
+    switch (errorCode) {
+      case 'auth/email-already-in-use':
+        return 'This email is already in use. Please try logging in.';
+      case 'auth/invalid-email':
+        return 'The email address is not valid.';
+      case 'auth/weak-password':
+        return 'Password should be at least 6 characters.';
+      default:
+        return 'Something went wrong. Please try again.';
+    }
+  }
+
+  // Start the loading sequence after email/password entry
+  const startLoadingSequence = () => {
+    const randomLoadingMessage = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
+    setLoadingMessage(randomLoadingMessage);
+    setShowLoadingScreen(true);
+    
+    // Ensure pulsateAnim starts with a valid value
+    pulsateAnim.setValue(1);
+    
+    const pulsateAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulsateAnim, {
+          toValue: 1.4,
+          duration: 1000,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.quad),
+        }),
+        Animated.timing(pulsateAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+          easing: Easing.in(Easing.quad),
+        }),
+      ])
+    );
+    
+    pulsateAnimation.start();
+    
+    let hapticCounter = 0;
+    const hapticInterval = setInterval(() => {
+      hapticCounter++;
+      if (hapticCounter > 6) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      } else if (hapticCounter > 3) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      } else {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+    }, 200);
+    
+    setTimeout(() => {
+      pulsateAnimation.stop();
+      clearInterval(hapticInterval);
+      setShowLoadingScreen(false);
+        setStep(step + 1);
+    }, 3000);
+  };
+
+  // Check if email already exists
+  const checkEmailExists = async (email: string) => {
+    if (!email || !/.+@.+\..+/.test(email)) return false;
+    
+    try {
+      console.log('=== EMAIL VALIDATION DEBUG ===');
+      console.log('Checking if email exists:', email);
+      console.log('Database reference:', db);
+      
+      // First, let's test if we can query the database at all
+      console.log('Testing database connection...');
+      const testRef = collection(db, 'users');
+      const testQuery = query(testRef);
+      const testSnapshot = await getDocs(testQuery);
+      console.log('Database connection test - Total users in collection:', testSnapshot.size);
+      
+      // Let's also try to see what's in the first few documents
+      if (testSnapshot.size > 0) {
+        console.log('First few documents:');
+        testSnapshot.docs.slice(0, 3).forEach((doc, index) => {
+          const data = doc.data();
+          console.log(`Document ${index + 1}:`, doc.id);
+          console.log('  Data keys:', Object.keys(data));
+          console.log('  Full data:', JSON.stringify(data, null, 2));
+        });
+      } else {
+        console.log('No documents found in users collection');
+      }
+      
+      // Check Firestore users collection for specific email
+      const usersRef = collection(db, 'users');
+      console.log('Users collection reference:', usersRef);
+      
+      // Try different possible field names for email
+      console.log('Trying different email field names...');
+      
+      // Try 'email' field
+      let q = query(usersRef, where('email', '==', email));
+      let querySnapshot = await getDocs(q);
+      console.log('Query with "email" field - docs found:', querySnapshot.size);
+      
+      // Try 'emailAddress' field
+      q = query(usersRef, where('emailAddress', '==', email));
+      querySnapshot = await getDocs(q);
+      console.log('Query with "emailAddress" field - docs found:', querySnapshot.size);
+      
+      // Try 'userEmail' field
+      q = query(usersRef, where('userEmail', '==', email));
+      querySnapshot = await getDocs(q);
+      console.log('Query with "userEmail" field - docs found:', querySnapshot.size);
+      
+      // Try 'contact' field
+      q = query(usersRef, where('contact', '==', email));
+      querySnapshot = await getDocs(q);
+      console.log('Query with "contact" field - docs found:', querySnapshot.size);
+      
+      // Now try the original email field for the final result
+      q = query(usersRef, where('email', '==', email));
+      querySnapshot = await getDocs(q);
+      console.log('Final query with "email" field - docs found:', querySnapshot.size);
+      
+      // Log all documents to see what's in the collection
+      querySnapshot.forEach((doc) => {
+        console.log('Document found:', doc.id, doc.data());
+      });
+      
+      // Also check if there's already a user signed in with this email
+      // This handles the case where a user was created but not yet saved to Firestore
+      if (auth.currentUser && auth.currentUser.email === email) {
+        console.log('User already signed in with this email');
+        return true;
+      }
+      
+      const result = !querySnapshot.empty;
+      console.log('Final email exists result:', result);
+      console.log('=== END EMAIL VALIDATION DEBUG ===');
+      return result;
+    } catch (error) {
+      console.error('Error checking email:', error);
+      console.error('Error details:', error);
+      return false;
+    }
+  };
+
+  // Check if phone already exists
+  const checkPhoneExists = async (phone: string) => {
+    console.log('=== PHONE VALIDATION DEBUG ===');
+    console.log('Checking if phone exists:', phone);
+    
+    if (!phone || phone.length < 10) {
+      console.log('Phone too short, returning false');
+      return false;
+    }
+    
+    try {
+      const q = query(collection(db, 'users'), where('phone', '==', phone));
+      console.log('Phone query created:', q);
+      
+      const querySnapshot = await getDocs(q);
+      console.log('Phone query result - docs found:', querySnapshot.size);
+      
+      const result = !querySnapshot.empty;
+      console.log('Phone exists result:', result);
+      console.log('=== END PHONE VALIDATION DEBUG ===');
+      return result;
+    } catch (error) {
+      console.error('Error checking phone:', error);
+      console.error('Phone validation error details:', error);
+      return false;
+    }
+  };
 
   useEffect(() => {
-    // Animate modal in (fly up) only when component is mounted
     Animated.spring(modalAnim, {
       toValue: 0,
       useNativeDriver: true,
@@ -225,23 +327,120 @@ export default function SignupScreen() {
       tension: 60,
     }).start();
 
-    // Keyboard listeners
+    Animated.spring(orangeBackgroundAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 50,
+    }).start();
+
+    Animated.spring(welcomeModalAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 50,
+    }).start();
+  }, []);
+
+  // Validate email when it changes
+  useEffect(() => {
+    if (mode === 'email' && form.email) {
+      const validateEmail = async () => {
+        console.log('Validating email:', form.email);
+        setIsValidating(true);
+        const exists = await checkEmailExists(form.email);
+        console.log('Email validation result:', exists);
+        setEmailExists(exists);
+        setIsValidating(false);
+      };
+      
+      const timeoutId = setTimeout(validateEmail, 500);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [form.email, mode]);
+
+  // Validate phone when it changes
+  useEffect(() => {
+    console.log('Phone validation useEffect - mode:', mode, 'phone:', form.phone);
+    if (mode === 'phone' && form.phone) {
+      const validatePhone = async () => {
+        console.log('Validating phone:', form.phone);
+        setIsValidating(true);
+        const exists = await checkPhoneExists(form.phone);
+        console.log('Phone validation result:', exists);
+        setPhoneExists(exists);
+        setIsValidating(false);
+      };
+      
+      const timeoutId = setTimeout(validatePhone, 500);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [form.phone, mode]);
+
+  useEffect(() => {
     const handleKeyboardShow = (e: KeyboardEvent) => {
+      setIsKeyboardDismissing(false);
+      const keyboardHeight = e.endCoordinates.height;
+      
+      // Safety check to ensure keyboardHeight is a valid number
+      if (keyboardHeight && !isNaN(keyboardHeight) && isFinite(keyboardHeight)) {
+        const modalOffset = -keyboardHeight * 0.35;
+        const backgroundOffset = -keyboardHeight * 0.005;
+        
+        // Only animate if we have valid calculated values
+        if (!isNaN(modalOffset) && isFinite(modalOffset)) {
       Animated.timing(modalAnim, {
-        toValue: -keyboardOffset,
+            toValue: modalOffset,
+            duration: 400,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.cubic),
+      }).start();
+        }
+      
+        if (!isNaN(backgroundOffset) && isFinite(backgroundOffset)) {
+      Animated.timing(orangeBackgroundAnim, {
+            toValue: backgroundOffset,
+        duration: 400,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.cubic),
+      }).start();
+        }
+      }
+      
+      // Logo animation is safe as it uses fixed values
+      Animated.timing(logoSizeAnim, {
+        toValue: 0.7,
         duration: 300,
         useNativeDriver: true,
         easing: Easing.out(Easing.cubic),
       }).start();
     };
+
     const handleKeyboardHide = () => {
-      Animated.timing(modalAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-        easing: Easing.out(Easing.cubic),
-      }).start();
+      if (!isKeyboardDismissing) {
+        Animated.timing(modalAnim, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.cubic),
+        }).start();
+        
+        Animated.timing(orangeBackgroundAnim, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.cubic),
+        }).start();
+        
+        Animated.timing(logoSizeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.cubic),
+        }).start();
+      }
     };
+
     const showSub = Keyboard.addListener('keyboardDidShow', handleKeyboardShow);
     const hideSub = Keyboard.addListener('keyboardDidHide', handleKeyboardHide);
     return () => {
@@ -250,75 +449,82 @@ export default function SignupScreen() {
     };
   }, []);
 
-  // Step content
   const current = steps[step] || steps[steps.length - 1];
-  const isSummary = current.key === 'summary';
-
-  // Tab switcher for contact method
-  const renderContactTabs = () => (
-    <View style={{ flexDirection: 'row', width: '80%', marginBottom: 16, alignSelf: 'center', gap: 8 }}>
-      <TouchableOpacity
-        style={{
-          flex: 1,
-          backgroundColor: mode === 'email' ? '#FB7A20' : '#f2f2f2',
-          borderRadius: 12,
-          paddingVertical: 12,
-          alignItems: 'center',
-          borderWidth: 0,
-        }}
-        onPress={() => setMode('email')}
-      >
-                        <CustomText fontFamily="figtree" style={{ color: mode === 'email' ? 'white' : '#7A7A7A', fontWeight: '600', fontSize: 16 }}>Email</CustomText>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={{
-          flex: 1,
-          backgroundColor: mode === 'phone' ? '#FB7A20' : '#f2f2f2',
-          borderRadius: 12,
-          paddingVertical: 12,
-          alignItems: 'center',
-          borderWidth: 0,
-        }}
-        onPress={() => setMode('phone')}
-      >
-                        <CustomText fontFamily="figtree" style={{ color: mode === 'phone' ? 'white' : '#7A7A7A', fontWeight: '600', fontSize: 16 }}>Phone</CustomText>
-      </TouchableOpacity>
-    </View>
-  );
 
   const handleProfilePicturePick = async () => {
     try {
       setUploadingPicture(true);
+      setError('');
+      
       const result = await pickProfilePicture();
-      if (result) {
+      
+      if (result && result.uri) {
         setProfilePicture(result.uri);
       }
     } catch (error) {
-      console.error('Error picking profile picture:', error);
-      Alert.alert('Error', 'Failed to pick profile picture. Please try again.');
+      console.error('Profile picture picker failed:', error);
+      setError('Unable to open photo picker. Please try again.');
     } finally {
       setUploadingPicture(false);
     }
   };
 
+  const handleLogoPick = async () => {
+    try {
+      setUploadingPicture(true);
+      setError('');
+      
+      const result = await pickProfilePicture();
+      
+      if (result && result.uri) {
+        setForm({ ...form, logo: result.uri });
+      }
+    } catch (error) {
+      console.error('Error picking logo:', error);
+      setError('Failed to pick logo. Please try again.');
+    } finally {
+      setUploadingPicture(false);
+    }
+  };
+
+  const handleAccountTypeSelect = (business: boolean) => {
+    setIsBusiness(business);
+    setStep(0);
+  };
+
   const handleNext = async () => {
+    console.log('handleNext called, current step:', step, 'current key:', steps[step]?.key);
     setError('');
     const current = steps[step];
-    const value = form[current.key as keyof typeof form];
     
-    if (current.key === 'profilePicture') {
-      // Profile picture step is optional, always proceed
+    if (current.key === 'profilePicture' || current.key === 'logo') {
+      // For profile picture/logo steps, allow signup if required fields are filled
       if (step < steps.length - 1) {
         setStep(step + 1);
+      } else {
+        // If this is the last step, try to signup
+        await handleSignup();
       }
       return;
     }
     
     if (current.key === 'contact') {
-      if (typeof current.validate === 'function') {
-        const valid = current.validate('', form);
-        if (valid !== true) {
-          setError(typeof valid === 'string' ? valid : 'Please fill this in.');
+      if (mode === 'email') {
+        if (!form.email || !/.+@.+\..+/.test(form.email)) {
+          setError('Please enter a valid email address.');
+          return;
+        }
+        if (emailExists) {
+          setError('This email is already in use. Please choose a different one.');
+          return;
+        }
+      } else if (mode === 'phone') {
+        if (!form.phone || form.phone.length < 10) {
+          setError('Please enter a valid phone number.');
+          return;
+        }
+        if (phoneExists) {
+          setError('This phone number is already in use. Please choose a different one.');
           return;
         }
       }
@@ -327,21 +533,41 @@ export default function SignupScreen() {
       }
       return;
     }
-    if (typeof current.validate === 'function') {
-      const valid = current.validate(value as string);
-      if (valid !== true) {
-        setError(typeof valid === 'string' ? valid : 'Please fill this in.');
+    
+    if (current.key === 'password') {
+      if (!form.password || form.password.length < 6) {
+        setError('Password should be at least 6 characters.');
+        return;
+      }
+      if (step < steps.length - 1) {
+        setStep(step + 1);
+      }
+      return;
+    }
+    
+    if (current.key === 'name' || current.key === 'businessName') {
+      const value = form[current.key as keyof typeof form];
+      if (typeof value === 'string' && (!value || value.trim().length < 2)) {
+        setError(`Please enter your ${current.key === 'name' ? 'name' : 'business name'}.`);
         return;
       }
     }
-    if (step < steps.length - 1) {
+    
+    // Only trigger signup on the final step, not when required fields are filled
+    console.log('Step validation - step:', step, 'total steps:', steps.length);
+    console.log('Form data:', { name: form.name, password: form.password, email: form.email, phone: form.phone });
+    
+    if (step === steps.length - 1) {
+      console.log('Final step reached, attempting signup...');
+      await handleSignup();
+    } else if (step < steps.length - 1) {
+      console.log('Advancing to next step...');
       setStep(step + 1);
     }
   };
 
   const handleBack = () => {
     if (step === 0) {
-      // Animate signup modal down before navigating back to onboarding
       Animated.timing(modalAnim, {
         toValue: MODAL_HEIGHT + 80,
         duration: 500,
@@ -359,631 +585,335 @@ export default function SignupScreen() {
   const handleSignup = async () => {
     setLoading(true);
     setError('');
+    
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, form.email, form.password);
-      const user = userCredential.user;
+      if (!form.password || !form.name) {
+        setError('Please fill in all required fields.');
+        setLoading(false);
+        return;
+      }
       
-      // Upload profile picture if selected
+      if (mode === 'email' && (!form.email || !/.+@.+\..+/.test(form.email))) {
+        setError('Please enter a valid email address.');
+        setLoading(false);
+        return;
+      } else if (mode === 'phone' && (!form.phone || form.phone.length < 10)) {
+        setError('Please enter a valid phone number.');
+        setLoading(false);
+        return;
+      }
+      
+      // Double-check email/phone existence right before signup to avoid race conditions
+      if (mode === 'email') {
+        console.log('Double-checking email before signup:', form.email);
+        const emailStillExists = await checkEmailExists(form.email);
+        console.log('Email still exists check result:', emailStillExists);
+        if (emailStillExists) {
+          setError('This email is already in use. Please choose a different one.');
+          setLoading(false);
+          return;
+        }
+      } else if (mode === 'phone') {
+        console.log('Double-checking phone before signup:', form.phone);
+        const phoneStillExists = await checkPhoneExists(form.phone);
+        console.log('Phone still exists check result:', phoneStillExists);
+        if (phoneStillExists) {
+          setError('This phone number is already in use. Please choose a different one.');
+          setLoading(false);
+          return;
+        }
+      }
+      
+      if (isBusiness && (!form.businessName || !form.cuisine || !form.pricing || !form.address || !form.hours)) {
+        setError('Please fill in all business information.');
+        setLoading(false);
+        return;
+      }
+      
+      let user;
+      
+      if (mode === 'email') {
+        const userCredential = await createUserWithEmailAndPassword(auth, form.email, form.password);
+        user = userCredential.user;
+      } else if (mode === 'phone') {
+        const phoneEmail = `${form.phone}@phone.punch.com`;
+        const userCredential = await createUserWithEmailAndPassword(auth, phoneEmail, form.password);
+        user = userCredential.user;
+      }
+      
+      if (!user) {
+        setError('Failed to create user account.');
+        setLoading(false);
+        return;
+      }
+      
       let profilePictureUrl = '';
       if (profilePicture) {
         try {
           profilePictureUrl = await uploadProfilePicture(user.uid, profilePicture) || '';
         } catch (error) {
           console.error('Error uploading profile picture:', error);
-          // Continue with signup even if profile picture upload fails
         }
       }
       
-      await setDoc(doc(db, 'users', user.uid), {
-        uid: user.uid,
-        name: form.name,
-        bio: '', // Removed bio
-        profilePictureUrl: profilePictureUrl,
-        storesVisitedCount: 0,
-        storesVisitedHistory: [],
-        rewardsRedeemed: [],
-        followersCount: 0,
-        followingCount: 0,
-        followerUids: [],
-        followingUids: [],
-        emailNotifications: notifEmail, // Added email notifications
-        textNotifications: notifText, // Added text notifications
-      });
-      router.replace('../authenticated_tabs/home');
+      let logoUrl = '';
+      if (isBusiness && form.logo) {
+        try {
+          logoUrl = await uploadProfilePicture(user.uid, form.logo) || '';
+        } catch (error) {
+          console.error('Error uploading logo:', error);
+        }
+      }
+      
+      if (isBusiness) {
+        await setDoc(doc(db, 'users', user.uid), {
+          uid: user.uid,
+          name: form.name,
+          businessName: form.businessName,
+          cuisine: form.cuisine,
+          pricing: form.pricing,
+          address: form.address,
+          hours: form.hours,
+          logoUrl: logoUrl,
+          isBusiness: true,
+          contactMethod: mode,
+          email: mode === 'email' ? form.email : null,
+          phone: mode === 'phone' ? form.phone : null,
+          bio: '',
+          profilePictureUrl: profilePictureUrl,
+          storesVisitedCount: 0,
+          storesVisitedHistory: [],
+          rewardsRedeemed: [],
+          followersCount: 0,
+          followingCount: 0,
+          followerUids: [],
+          followingUids: [],
+          emailNotifications: notifEmail,
+          textNotifications: notifText,
+        });
+      } else {
+        await setDoc(doc(db, 'users', user.uid), {
+          uid: user.uid,
+          name: form.name,
+          contactMethod: mode,
+          email: mode === 'email' ? form.email : null,
+          phone: mode === 'phone' ? form.phone : null,
+          bio: '',
+          profilePictureUrl: profilePictureUrl,
+          isBusiness: false,
+          storesVisitedCount: 0,
+          storesVisitedHistory: [],
+          rewardsRedeemed: [],
+          followersCount: 0,
+          followingCount: 0,
+          followerUids: [],
+          followingUids: [],
+          emailNotifications: notifEmail,
+          textNotifications: notifText,
+        });
+      }
+      
+      console.log('Signup successful, navigating to home...');
+      console.log('User UID:', user.uid);
+      console.log('Current auth state:', auth.currentUser);
+      console.log('User email verified:', user.emailVerified);
+      
+      // Email verification disabled for now
+      console.log('Email verification disabled - proceeding with signup');
+      
+      // Ensure we're not loading anymore before navigation
+      setLoading(false);
+      
+      // Force a refresh of the auth state to ensure it's up to date
+      await auth.updateCurrentUser(user);
+      console.log('Updated current user, auth state should now reflect the new user');
+      
+      // Try to sign in the user to ensure they're properly authenticated
+      console.log('Signing in user to ensure authentication...');
+      try {
+        if (mode === 'email') {
+          await signInWithEmailAndPassword(auth, form.email, form.password);
+        } else if (mode === 'phone') {
+          const phoneEmail = `${form.phone}@phone.punch.com`;
+          await signInWithEmailAndPassword(auth, phoneEmail, form.password);
+        }
+        console.log('User signed in successfully');
+      } catch (signInError) {
+        console.error('Error signing in user:', signInError);
+      }
+      
+      // Check if user is now authenticated
+      const currentUser = auth.currentUser;
+      console.log('After sign in - Current auth state:', currentUser);
+      console.log('User is authenticated:', !!currentUser);
+      
+      if (currentUser) {
+        console.log('User is authenticated, navigating to home...');
+        // Try to navigate directly since user is authenticated
+        try {
+          router.replace('/authenticated_tabs/home');
+        } catch (error) {
+          console.log('Direct navigation failed, falling back to auth state listener');
+        }
+      } else {
+        console.log('User not authenticated yet, waiting for auth state change...');
+      }
     } catch (err: any) {
+      console.error('Signup error:', err);
       setError(getFriendlyErrorMessage(err.code));
-    }
     setLoading(false);
+    }
+  };
+
+  const dismissKeyboard = () => {
+    setIsKeyboardDismissing(true);
+    Keyboard.dismiss();
+    setTimeout(() => {
+      setIsKeyboardDismissing(false);
+    }, 300);
+  };
+
+  const handleLoginPress = () => {
+    router.push('../unauthenticated_tabs/login');
+  };
+
+  const handleTermsPress = () => {
+    Linking.openURL('https://www.punchrewards.app/terms-of-service');
+  };
+
+  const handlePrivacyPress = () => {
+    Linking.openURL('https://www.punchrewards.app/privacy-policy');
   };
 
   return (
-    // soft peachy background
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={[onboardingStyles.container, { backgroundColor: '#FFF7F2' }]}> {/* Use onboardingStyles */}
-        <AnimatedBubblesBackground />
-        <SafeAreaView style={onboardingStyles.safeArea}>
-          {/* Back Button at top left of screen */}
-          <TouchableOpacity style={styles.backButtonScreen} onPress={handleBack}>
-            <AntDesign name="arrowleft" size={28} color="#FB7A20" />
-          </TouchableOpacity>
-          {/* Logo and circular progress above card */}
-          <View style={{ alignItems: 'center', justifyContent: 'center', marginBottom: 32 }}>
-            <CircularProgressWithLogo progress={(step + 1) / steps.length} />
-          </View>
-          {/* Card/modal effect for the form, wrapped in KeyboardAvoidingView */}
-          <KeyboardAvoidingView
-            style={{ flex: 1, width: '100%' }}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-          >
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+        <SignupBackground
+          height={safeHeight}
+          logoSizeAnim={logoSizeAnim}
+          orangeBackgroundAnim={orangeBackgroundAnim}
+          onBackPress={handleBack}
+        />
+        
+          {/* Account Type Selection */}
+          {isBusiness === null && (
+          <AccountTypeSelection
+            onSelect={handleAccountTypeSelect}
+            welcomeModalAnim={welcomeModalAnim}
+            onLoginPress={handleLoginPress}
+          />
+          )}
+          
+                  {/* Signup Form Modal */}
+        {isBusiness !== null && (
+          <TouchableWithoutFeedback onPress={dismissKeyboard}>
             <Animated.View style={{
               position: 'absolute',
-              left: 24,
-              right: 24,
-              bottom: 0,
-              width: MODAL_WIDTH,
+              left: 0,
+              right: 0,
+              bottom: -50,
+              width: '100%',
               zIndex: 10,
-              minHeight: MODAL_HEIGHT,
+              height: '85%',
               backgroundColor: 'transparent',
-              justifyContent: 'flex-end',
+              justifyContent: 'flex-start',
               alignSelf: 'center',
-              transform: [{ translateY: modalAnim }],
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -8 },
+              shadowOpacity: 0.3,
+              shadowRadius: 16,
+              elevation: 12,
             }}>
-              <BlurView
-                intensity={40}
-                tint="light"
-                style={{
+              <View style={{
                   borderTopLeftRadius: 32,
                   borderTopRightRadius: 32,
-                  borderBottomLeftRadius: 16,
-                  borderBottomRightRadius: 16,
+                  borderBottomLeftRadius: 0,
+                  borderBottomRightRadius: 0,
                   paddingHorizontal: 32,
                   paddingTop: 32,
-                  paddingBottom: 32,
+                  paddingBottom: 0,
                   flex: 1,
                   shadowColor: '#000',
-                  shadowOffset: { width: 0, height: -8 },
-                  shadowOpacity: 0.18,
-                  shadowRadius: 24,
-                  elevation: 18,
+                  shadowOffset: { width: 0, height: -15 },
+                  shadowOpacity: 0.5,
+                  shadowRadius: 25,
+                  elevation: 25,
                   alignItems: 'center',
                   justifyContent: 'flex-start',
-                  width: MODAL_WIDTH,
+                  width: '100%',
                   overflow: 'hidden',
-                  backgroundColor: 'rgba(255,255,255,0.55)',
-                }}
-              >
-                {/* Animated typewriter prompt and all step content here (move from Animated.View) */}
-                              <CustomText variant="title" weight="bold" fontFamily="figtree" style={styles.prompt}>
-                {current.prompt}
-              </CustomText>
-                {/* Name step: show name input */}
-                {current.key === 'name' && (
-                  <View style={styles.inputContainer}>
-                    <AntDesign name="user" size={20} color="#FB7A20" style={styles.inputIconCentered} />
-                    <TextInput
-                      placeholder="Your full name"
-                      style={[styles.input, { fontFamily: 'Figtree_400Regular' }]}
-                      value={form.name}
-                      onChangeText={text => {
-                        setForm({ ...form, name: text });
-                        setError('');
-                      }}
-                      autoCapitalize="words"
-                      placeholderTextColor="#aaa"
-                      editable={!loading}
-                      maxLength={40}
-                      onSubmitEditing={handleNext}
-                      returnKeyType="next"
-                    />
-                  </View>
-                )}
-                
-                {/* Profile Picture step */}
-                {current.key === 'profilePicture' && (
-                  <View style={styles.profilePictureContainer}>
-                    <TouchableOpacity 
-                      style={styles.profilePictureButton} 
-                      onPress={handleProfilePicturePick}
-                      disabled={uploadingPicture}
-                    >
-                      {profilePicture ? (
-                        <Image source={{ uri: profilePicture }} style={styles.profilePicture} />
-                      ) : (
-                        <View style={styles.profilePicturePlaceholder}>
-                          <AntDesign name="camera" size={32} color="#FB7A20" />
-                          <CustomText fontFamily="figtree" style={styles.profilePictureText}>
-                            {uploadingPicture ? 'Uploading...' : 'Tap to add photo'}
-                          </CustomText>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                    {profilePicture && (
-                      <TouchableOpacity 
-                        style={styles.removePictureButton}
-                        onPress={() => setProfilePicture(null)}
-                      >
-                        <CustomText fontFamily="figtree" style={styles.removePictureText}>
-                          Remove
-                        </CustomText>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                )}
-                {/* Password step: show password input */}
-                {current.key === 'password' && (
-                  <>
-                    <View style={styles.inputContainer}>
-                      <AntDesign name="lock" size={20} color="#FB7A20" style={styles.inputIconCentered} />
-                      <TextInput
-                        placeholder="Password"
-                        style={[styles.input, { fontFamily: 'Figtree_400Regular' }]}
-                        value={form.password}
-                        onChangeText={text => {
-                          setForm({ ...form, password: text });
-                          setError('');
-                        }}
-                        autoCapitalize="none"
-                        placeholderTextColor="#aaa"
-                        secureTextEntry={true}
-                        editable={!loading}
-                        maxLength={30}
-                        onSubmitEditing={handleNext}
-                        returnKeyType="done"
-                      />
-                    </View>
-                    {/* Terms and Privacy checkbox */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 8 }}>
-                      <CustomCheckbox value={agree} onValueChange={setAgree} />
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                          <CustomText fontFamily="figtree" style={{ color: '#222' }}>I agree to </CustomText>
-                          <CustomText fontFamily="figtree" style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://your-terms-url.com')}>Terms of Service</CustomText>
-                          <CustomText fontFamily="figtree" style={{ color: '#222' }}>{' & '}</CustomText>
-                          <CustomText fontFamily="figtree" style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://your-privacy-url.com')}>Privacy Policy</CustomText>
-                      </View>
-                    </View>
-                    {/* Back and Create Account buttons in the same row */}
-                    <View style={styles.buttonRow}>
-                      {step > 0 && (
-                        <TouchableOpacity style={styles.secondaryButton} onPress={handleBack} disabled={loading}>
-                          <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.secondaryButtonText}>Back</CustomText>
-                        </TouchableOpacity>
-                      )}
-                      <TouchableOpacity
-                        style={[styles.signupButton, (!agree || loading || !(form.password && form.password.length >= 6)) && styles.signupButtonDisabled]}
-                        onPress={handleSignup}
-                        disabled={!agree || loading || !(form.password && form.password.length >= 6)}
-                      >
-                        {loading ? (
-                          <ActivityIndicator size="small" color="#FB7A20" />
-                        ) : (
-                          <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.signupButtonText}>
-                            Create Account
-                          </CustomText>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                )}
-                {/* Contact step: show both email and phone fields */}
-                {current.key === 'contact' && (
-                  <View style={{ width: '100%', alignItems: 'center' }}>
-                    <View style={styles.inputContainer}>
-                      <AntDesign name="mail" size={20} color="#FB7A20" style={styles.inputIconCentered} />
-                      <TextInput
-                        placeholder="Email"
-                        style={[styles.input, { fontFamily: 'Figtree_400Regular' }]}
-                        value={form.email}
-                        onChangeText={text => {
-                          setForm({ ...form, email: text });
-                          setError('');
-                        }}
-                        autoCapitalize="none"
-                        placeholderTextColor="#aaa"
-                        keyboardType="email-address"
-                        editable={!loading}
-                        maxLength={30}
-                        onSubmitEditing={handleNext}
-                        returnKeyType="next"
-                      />
-                    </View>
-                    <View style={styles.inputContainer}>
-                      <AntDesign name="phone" size={20} color="#FB7A20" style={styles.inputIconCentered} />
-                      <TextInput
-                        placeholder="Phone (optional)"
-                        style={[styles.input, { fontFamily: 'Figtree_400Regular' }]}
-                        value={formatPhoneNumber(form.phone)}
-                        onChangeText={text => {
-                          setForm({ ...form, phone: text.replace(/\D/g, '').slice(0, 10) });
-                          setError('');
-                        }}
-                        autoCapitalize="none"
-                        placeholderTextColor="#aaa"
-                        keyboardType="phone-pad"
-                        editable={!loading}
-                        maxLength={12}
-                        onSubmitEditing={handleNext}
-                        returnKeyType="next"
-                      />
-                    </View>
-                  </View>
-                )}
-                {/* Notification preferences */}
-                {current.key === 'contact' && (
-                  <View style={{ width: '100%', marginTop: 12, marginBottom: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                      <Switch value={notifEmail} onValueChange={setNotifEmail} thumbColor={notifEmail ? '#FB7A20' : '#ccc'} trackColor={{ true: '#fcd7b0', false: '#eee' }} />
-                      <CustomText fontFamily="figtree" style={{ marginLeft: 8, color: '#222' }}>Email me updates{' '}<CustomText fontFamily="figtree" style={{ color: '#222' }}>&</CustomText>{' '}rewards</CustomText>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Switch value={notifText} onValueChange={setNotifText} thumbColor={notifText ? '#FB7A20' : '#ccc'} trackColor={{ true: '#fcd7b0', false: '#eee' }} />
-                      <CustomText fontFamily="figtree" style={{ marginLeft: 8, color: '#222' }}>Text me updates{' '}<CustomText fontFamily="figtree" style={{ color: '#222' }}>&</CustomText>{' '}rewards</CustomText>
-                    </View>
-                  </View>
-                )}
+                  backgroundColor: '#FFFFFF',
+              }}>
+                <SignupForm
+                  current={current}
+                  step={step}
+                  steps={steps}
+                  form={form}
+                  setForm={setForm}
+                  setError={setError}
+                  loading={loading}
+                  profilePicture={profilePicture}
+                  uploadingPicture={uploadingPicture}
+                  showPassword={showPassword}
+                  setShowPassword={setShowPassword}
+                  agree={agree}
+                  setAgree={setAgree}
+                  notifEmail={notifEmail}
+                  setNotifEmail={setNotifEmail}
+                  notifText={notifText}
+                  setNotifText={setNotifText}
+                  mode={mode}
+                  setMode={setMode}
+                  emailExists={emailExists}
+                  phoneExists={phoneExists}
+                  isValidating={isValidating}
+                  showMoreCuisine={showMoreCuisine}
+                  setShowMoreCuisine={setShowMoreCuisine}
+                  cuisineOptions={cuisineOptions}
+                  showLoadingScreen={showLoadingScreen}
+                  loadingMessage={loadingMessage}
+                  pulsateAnim={pulsateAnim}
+                  onProfilePicturePick={handleProfilePicturePick}
+                  onLogoPick={handleLogoPick}
+                  onRemoveProfilePicture={() => setProfilePicture(null)}
+                  onRemoveLogo={() => setForm({ ...form, logo: null })}
+                  formatPhoneNumber={formatPhoneNumber}
+                />
+
                 {/* Error message */}
                 {error ? (
-                  <View style={styles.errorContainer}>
-                    <AntDesign name="exclamationcircleo" size={16} color="#FB7A20" />
-                    <CustomText variant="body" weight="medium" fontFamily="figtree" style={styles.errorText}>
+                  <View style={loginStyles.errorContainer}>
+                    <CustomText variant="body" weight="medium" fontFamily="figtree" style={loginStyles.errorText}>
                       {error}
                     </CustomText>
                   </View>
                 ) : null}
-                {/* Step navigation */}
-                {/* On the name step, show only Next (disabled unless valid), no Back */}
-                {current.key === 'name' && (
-                  <View style={styles.buttonRow}>
-                    <TouchableOpacity
-                      style={[styles.nextButton, (loading || !(form.name && form.name.trim().length > 1)) && styles.nextButtonDisabled]}
-                      onPress={handleNext}
-                      disabled={loading || !(form.name && form.name.trim().length > 1)}
-                    >
-                      <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.nextButtonText}>
-                        Next
-                      </CustomText>
-                    </TouchableOpacity>
-                  </View>
-                )}
-                
-                {/* On the profile picture step, show Back and Next */}
-                {current.key === 'profilePicture' && (
-                  <View style={styles.buttonRow}>
-                    <TouchableOpacity style={styles.secondaryButton} onPress={handleBack} disabled={loading}>
-                      <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.secondaryButtonText}>Back</CustomText>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.nextButton}
-                      onPress={handleNext}
-                      disabled={loading}
-                    >
-                      <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.nextButtonText}>
-                        Next
-                      </CustomText>
-                    </TouchableOpacity>
-                  </View>
-                )}
-                {/* On the contact step, show Back and Next (Next disabled unless valid) */}
-                {current.key === 'contact' && (
-                  <View style={styles.buttonRow}>
-                    {step > 0 && (
-                      <TouchableOpacity style={styles.secondaryButton} onPress={handleBack} disabled={loading}>
-                        <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.secondaryButtonText}>Back</CustomText>
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      style={[styles.nextButton, (loading || !form.email || !/.+@.+\..+/.test(form.email)) && styles.nextButtonDisabled]}
-                      onPress={handleNext}
-                      disabled={loading || !form.email || !/.+@.+\..+/.test(form.email)}
-                    >
-                      <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.nextButtonText}>
-                        Next
-                      </CustomText>
-                    </TouchableOpacity>
-                  </View>
-                )}
-                {/* On the password step, do not render Back or Next buttons */}
-                {/* Login Link inside modal */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 24 }}>
-                  <CustomText variant="body" weight="normal" fontFamily="figtree" style={styles.loginText}>
-                    Already have an account?{' '}
-                  </CustomText>
-                  <TouchableOpacity onPress={() => router.push('../unauthenticated_tabs/login')}>
-                    <CustomText variant="body" weight="bold" fontFamily="figtree" style={styles.loginLink}>
-                      Login
-                    </CustomText>
-                  </TouchableOpacity>
-                </View>
-              </BlurView>
+
+                {/* Navigation buttons */}
+                <SignupNavigation
+                  current={current}
+                  step={step}
+                  steps={steps}
+                  loading={loading}
+                  form={form}
+                  agree={agree}
+                  profilePicture={profilePicture}
+                  onNext={handleNext}
+                  onBack={handleBack}
+                  onSignup={handleSignup}
+                  onStartLoadingSequence={startLoadingSequence}
+                />
+                      </View>
             </Animated.View>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </View>
-    </TouchableWithoutFeedback>
+          </TouchableWithoutFeedback>
+        )}
+    </View>
+  </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: 'white',
-  },
-  safeArea: {
-    flex: 1,
-  },
-  backButton: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    zIndex: 10,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 24,
-    padding: 8,
-  },
-  backButtonScreen: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    zIndex: 20,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 24,
-    padding: 8,
-  },
-  logoContainer: {
-    marginTop: 48,
-    marginBottom: 24,
-    alignItems: 'center',
-  },
-  logo: {
-    width: 90,
-    height: 90,
-    resizeMode: 'contain',
-  },
-  prompt: {
-    color: '#222',
-    marginBottom: 24,
-    textAlign: 'center',
-    fontSize: 22,
-    lineHeight: 30,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 12,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    width: '90%',
-    alignSelf: 'center',
-  },
-  inputIcon: {
-    marginRight: 12,
-    marginTop: 16,
-  },
-  input: {
-    flex: 1,
-    color: 'black',
-    fontSize: 16,
-    paddingVertical: 16,
-    backgroundColor: 'transparent',
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,122,32,0.08)',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 16,
-    marginTop: 4,
-  },
-  errorText: {
-    color: '#FB7A20',
-    marginLeft: 8,
-    fontSize: 14,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 8,
-    gap: 12,
-  },
-  nextButton: {
-    backgroundColor: '#FB7A20',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  nextButtonDisabled: {
-    opacity: 0.7,
-  },
-  nextButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  secondaryButton: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderWidth: 1,
-    borderColor: '#FB7A20',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  secondaryButtonText: {
-    color: '#FB7A20',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  signupButton: {
-    backgroundColor: '#FB7A20',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-    minWidth: 180,
-  },
-  signupButtonDisabled: {
-    opacity: 0.7,
-  },
-  signupButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  progressContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    gap: 6,
-  },
-  progressDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#eee',
-    marginHorizontal: 3,
-  },
-  progressDotActive: {
-    backgroundColor: '#FB7A20',
-  },
-  summaryBox: {
-    backgroundColor: 'rgba(0,0,0,0.04)',
-    borderRadius: 12,
-    padding: 18,
-    marginTop: 16,
-    width: '90%',
-    alignSelf: 'center',
-  },
-  loginContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 24,
-  },
-  loginText: {
-    color: 'black',
-    opacity: 0.8,
-  },
-  loginLink: {
-    color: '#FB7A20',
-    textDecorationLine: 'underline',
-  },
-  cardModal: {
-    backgroundColor: 'rgba(255,255,255,0.98)',
-    borderRadius: 28,
-    padding: 28,
-    marginHorizontal: 16,
-    marginTop: 0,
-    marginBottom: 16,
-    shadowColor: '#FB7A20',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.10,
-    shadowRadius: 24,
-    elevation: 12,
-    alignSelf: 'center',
-    width: '94%',
-    maxWidth: 420,
-    minHeight: 320,
-    alignItems: 'center',
-    position: 'relative',
-  },
-  cardModalFull: {
-    backgroundColor: 'rgba(255,255,255,0.98)',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-    padding: 28,
-    marginHorizontal: 0,
-    marginTop: 32,
-    marginBottom: 0,
-    shadowColor: '#FB7A20',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.10,
-    shadowRadius: 24,
-    elevation: 12,
-    alignSelf: 'stretch',
-    width: '100%',
-    maxWidth: undefined,
-    minHeight: 320,
-    alignItems: 'center',
-    position: 'relative',
-    flexGrow: 1,
-    justifyContent: 'flex-start',
-  },
-  inputIconCentered: {
-    marginRight: 12,
-    alignSelf: 'center',
-    marginTop: 0,
-  },
-  progressBarWrap: {
-    width: '94%',
-    maxWidth: 420,
-    alignSelf: 'center',
-    height: 6,
-    backgroundColor: '#f3e1d2',
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    marginBottom: 8,
-    overflow: 'hidden',
-  },
-  profilePictureContainer: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  profilePictureButton: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#f5f5f5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FB7A20',
-    borderStyle: 'dashed',
-    marginBottom: 12,
-  },
-  profilePicture: {
-    width: 116,
-    height: 116,
-    borderRadius: 58,
-  },
-  profilePicturePlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profilePictureText: {
-    color: '#FB7A20',
-    fontSize: 14,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  removePictureButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#ff6b6b',
-    borderRadius: 8,
-  },
-  removePictureText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-});
+ 

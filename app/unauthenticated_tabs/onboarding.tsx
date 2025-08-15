@@ -7,7 +7,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import VectorBackground from '../../components/VectorBackground';
 import CustomText from '../../components/CustomText';
@@ -31,7 +31,7 @@ import {
   Figtree_900Black,
 } from '@expo-google-fonts/figtree';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const onboardingData = [
   {
@@ -126,7 +126,7 @@ function ProgressCircleWithLogo({ screenIndex = 0 }: { screenIndex?: number }) {
 
 function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext, scrollViewRef, handleScroll, modalAnim }: OnboardingModalProps) {
   const insets = useSafeAreaInsets();
-  const MODAL_WIDTH = width - 48; // 24px margin on each side
+  const MODAL_WIDTH = width * 0.92; // 92% width instead of 100%
   const MODAL_HEIGHT = 280;
   // Animated progress bar
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -140,8 +140,8 @@ function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext,
   return (
     <Animated.View style={{
       position: 'absolute',
-      left: 24,
-      right: 24,
+      left: width * 0.04, // 4% margin on left (100% - 92% = 8%, so 4% on each side)
+      right: width * 0.04, // 4% margin on right
       bottom: 0,
       width: MODAL_WIDTH,
       zIndex: 10,
@@ -150,6 +150,11 @@ function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext,
       justifyContent: 'flex-end',
       alignSelf: 'center',
       transform: [{ translateY: modalAnim }],
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -8 },
+      shadowOpacity: 0.3,
+      shadowRadius: 16,
+      elevation: 12,
     }}>
      {/* Animated progress bar */}
      <View style={{ width: '100%', height: 6, backgroundColor: '#f3e1d2', borderTopLeftRadius: 8, borderTopRightRadius: 8, overflow: 'hidden', marginBottom: 8 }}>
@@ -177,10 +182,10 @@ function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext,
           paddingBottom: insets.bottom,
           flex: 1,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: -12 },
-          shadowOpacity: 0.3,
-          shadowRadius: 32,
-          elevation: 24,
+          shadowOffset: { width: 0, height: -15 },
+          shadowOpacity: 0.5,
+          shadowRadius: 25,
+          elevation: 25,
           alignItems: 'center',
           justifyContent: 'space-between',
           width: MODAL_WIDTH,
@@ -198,6 +203,21 @@ function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext,
           scrollEventThrottle={16}
           style={{ width: MODAL_WIDTH, flexGrow: 0 }}
           contentContainerStyle={{ alignItems: 'center' }}
+          snapToInterval={MODAL_WIDTH}
+          snapToAlignment="center"
+          decelerationRate="fast"
+          onMomentumScrollEnd={(event) => {
+            // Ensure we snap to the exact position after momentum scrolling
+            const contentOffset = event.nativeEvent.contentOffset.x;
+            const index = Math.round(contentOffset / MODAL_WIDTH);
+            const exactPosition = index * MODAL_WIDTH;
+            if (Math.abs(contentOffset - exactPosition) > 1) {
+              scrollViewRef.current?.scrollTo({
+                x: exactPosition,
+                animated: true,
+              });
+            }
+          }}
         >
           {onboardingData.map((item: OnboardingItem, index: number) => (
             <View key={item.id} style={{ width: MODAL_WIDTH, alignItems: 'center', justifyContent: 'center' }}>
@@ -214,7 +234,7 @@ function OnboardingModal({ currentIndex, onboardingData, handleSkip, handleNext,
           ))}
         </ScrollView>
         {/* Navigation Buttons */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: 8 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: 24 }}>
           <TouchableOpacity onPress={handleSkip}>
             <CustomText variant="body" weight="semibold" fontFamily="figtree" style={{ color: '#FB7A20', opacity: 0.8 }}>Skip</CustomText>
           </TouchableOpacity>
@@ -235,14 +255,18 @@ export default function Onboarding() {
   const modalAnim = useRef(new Animated.Value(MODAL_HEIGHT + 80)).current; // Start fully off-screen
   const [modalVisible, setModalVisible] = useState(false);
   const [showModal, setShowModal] = useState(true);
+  const [showImages, setShowImages] = useState(true); // Control image visibility
+  const imageOpacity = useRef(new Animated.Value(1)).current; // Smooth fade transition
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
+  const router = useRouter();
 
   useEffect(() => {
     // If coming from signup, remount modal and set to last slide
     if (params.fromSignup) {
       setCurrentIndex(onboardingData.length - 1);
       setShowModal(true);
+      setShowImages(false); // Hide images on last slide
       setTimeout(() => {
         Animated.spring(modalAnim, {
           toValue: 0,
@@ -275,14 +299,50 @@ export default function Onboarding() {
 
   const statusBarColor = '#FB7A20';
 
+  const fadeImages = (show: boolean) => {
+    if (show === showImages) return; // Don't animate if already in desired state
+    
+    // Stop any ongoing animation first
+    imageOpacity.stopAnimation();
+    
+    // Use a smoother animation sequence
+    Animated.timing(imageOpacity, {
+      toValue: show ? 1 : 0,
+      duration: 250, // Even faster for smoother feel
+      useNativeDriver: true,
+      easing: Easing.out(Easing.quad), // Smoother easing without bounce
+    }).start();
+    
+    // Update state immediately for immediate effect
+    setShowImages(show);
+  };
+
   const handleNext = () => {
     if (currentIndex < onboardingData.length - 1) {
       const nextIndex = currentIndex + 1;
+      
+      // Update index immediately
       setCurrentIndex(nextIndex);
+      
+      // Ensure images are visible for the new screen
+      if (nextIndex < onboardingData.length - 1) {
+        setShowImages(true);
+      } else {
+        // Hide images on last slide
+        setShowImages(false);
+      }
+      
+      // Scroll to the next position with smooth animation
+      const scrollPosition = nextIndex * MODAL_WIDTH;
       scrollViewRef.current?.scrollTo({
-        x: nextIndex * MODAL_WIDTH,
+        x: scrollPosition,
         animated: true,
       });
+      
+      // Add a small delay to ensure smooth transition
+      setTimeout(() => {
+        // This ensures the scroll animation completes smoothly
+      }, 100);
     } else {
       // Animate modal down before navigating
       Animated.timing(modalAnim, {
@@ -293,8 +353,14 @@ export default function Onboarding() {
       }).start(() => {
         setShowModal(false);
         setTimeout(() => {
-          router.replace('/unauthenticated_tabs/signup');
-        }, 10);
+          try {
+            if (router && typeof router.replace === 'function') {
+              router.replace('/unauthenticated_tabs/signup');
+            }
+          } catch (error) {
+            console.log('Router navigation error:', error);
+          }
+        }, 50); // Increased delay to ensure router is ready
       });
     }
   };
@@ -309,15 +375,33 @@ export default function Onboarding() {
     }).start(() => {
       setShowModal(false);
       setTimeout(() => {
-        router.replace('/unauthenticated_tabs/signup');
-      }, 10);
+        try {
+          if (router && typeof router.replace === 'function') {
+            router.replace('/unauthenticated_tabs/signup');
+          }
+        } catch (error) {
+          console.log('Router navigation error:', error);
+        }
+      }, 50); // Increased delay to ensure router is ready
     });
   };
 
   const handleScroll = (event: any) => {
     const contentOffset = event.nativeEvent.contentOffset.x;
     const index = Math.round(contentOffset / MODAL_WIDTH);
-    setCurrentIndex(index);
+    
+    // Update current index immediately for responsive UI
+    if (index !== currentIndex) {
+      setCurrentIndex(index);
+      
+      // Ensure images are visible for the new screen
+      if (index < onboardingData.length - 1) {
+        setShowImages(true);
+      } else {
+        // Hide images on last slide
+        setShowImages(false);
+      }
+    }
   };
 
   const renderScreen = (item: any, index: number) => {
@@ -337,13 +421,34 @@ export default function Onboarding() {
   };
 
   return (
-    <View style={[onboardingStyles.container, { flex: 1, backgroundColor: '#FFF7F2' }]}>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <StatusBar style="dark" translucent backgroundColor="transparent" />
-      <AnimatedBubblesBackground />
-      <OnboardingImages 
-        currentIndex={currentIndex}
-        isVisible={showModal}
-      />
+      
+      {/* Punch Logo at the top - visible on all pages */}
+      <View style={{
+        position: 'absolute',
+        top: -(height * 0.02), // Position above the visible screen area
+        zIndex: 2, // Ensure it's above other elements
+        alignItems: 'center',
+        left: 0,
+        right: 0,
+      }}>
+        <Image
+          source={require('../../assets/Punch_Logos/Punch_T/splash_morph.png')}
+          style={{
+            width: width * 0.2, // 20% of screen width
+            height: height * 0.1, // 10% of screen height
+            resizeMode: 'contain',
+          }}
+        />
+      </View>
+      
+      {(currentIndex === 0 || currentIndex === 1 || currentIndex === 2 || currentIndex === 3) && (
+        <OnboardingImages 
+          currentIndex={currentIndex}
+          isVisible={showModal}
+        />
+      )}
       {showModal && (
         <OnboardingModal
           currentIndex={currentIndex}

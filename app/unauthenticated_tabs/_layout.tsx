@@ -12,6 +12,6 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFF7F2', // match signup background
+    backgroundColor: '#FFFFFF', // Changed to white background
   },
 });

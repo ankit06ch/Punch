@@ -209,6 +209,7 @@ const profileStyles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
     fontFamily: 'Figtree_700Bold',
+    paddingHorizontal: 16,
   },
   modalScrollView: {
     paddingHorizontal: 20,
@@ -487,7 +488,7 @@ const profileStyles = StyleSheet.create({
   },
   // Message preview modal (conversation list)
   messagePreviewModalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 12,

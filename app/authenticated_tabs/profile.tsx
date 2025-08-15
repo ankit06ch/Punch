@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, ScrollView, FlatList, Share, Animated, TextInput, Dimensions, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, RefreshControl, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, ScrollView, FlatList, Share, Animated, TextInput, Dimensions, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, RefreshControl, Keyboard, ImageBackground } from 'react-native';
 import { Ionicons, Feather, AntDesign } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, query, where, orderBy, onSnapshot, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
@@ -66,6 +66,7 @@ export default function Profile() {
   const [showMessageSearch, setShowMessageSearch] = useState(false);
   const [messageSearchQuery, setMessageSearchQuery] = useState('');
   const [newUserResults, setNewUserResults] = useState<any[]>([]);
+  const [conversationsLoading, setConversationsLoading] = useState(true);
 
   // Search for new users (exclude current conversations and self)
   useEffect(() => {
@@ -442,6 +443,13 @@ export default function Profile() {
       messagesCount: unreadMessages.length
     });
   }, [notifications, unreadMessages]);
+
+  // Set loading to false when conversations data is ready
+  useEffect(() => {
+    if (notifications.length > 0 || friends.length > 0 || allUserMessages.length > 0) {
+      setConversationsLoading(false);
+    }
+  }, [notifications, friends, allUserMessages]);
 
   // Function to fetch restaurant names for liked restaurants
   const fetchLikedRestaurantsWithNames = async (likedRestaurantIds: string[]) => {
@@ -1811,7 +1819,13 @@ export default function Profile() {
               </View>
             )}
             <View style={[profileStyles.messagesContent, {paddingHorizontal: 0}]}> 
-              <FlatList
+              {conversationsLoading ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                  <ActivityIndicator size="large" color={ORANGE} />
+                  <Text style={{ color: '#888', textAlign: 'center', marginTop: 16 }}>Loading conversations...</Text>
+                </View>
+              ) : (
+                <FlatList
                 data={
                   (showMessageSearch && messageSearchQuery.trim().length > 0)
                     ? getConversations().filter((c: any) => {
@@ -1859,8 +1873,18 @@ export default function Profile() {
                 contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingBottom: 120 }}
                 ListFooterComponent={<View style={{ height: 32 }} />}
                 keyboardShouldPersistTaps="handled"
-                ListEmptyComponent={<Text style={{ color: '#888', textAlign: 'center', marginTop: 40 }}>No conversations yet. Messages from Puncho and friends will appear here.</Text>}
+                ListEmptyComponent={
+                  conversationsLoading ? (
+                    <View style={{ alignItems: 'center', marginTop: 40 }}>
+                      <ActivityIndicator size="large" color={ORANGE} />
+                      <Text style={{ color: '#888', textAlign: 'center', marginTop: 16 }}>Loading conversations...</Text>
+                    </View>
+                  ) : (
+                    <Text style={{ color: '#888', textAlign: 'center', marginTop: 40 }}>No conversations yet. Messages from Puncho and friends will appear here.</Text>
+                  )
+                }
               />
+              )}
             </View>
           </Animated.View>
         </TouchableOpacity>

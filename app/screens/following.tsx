@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Image, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, getDocs, query, where, deleteDoc, increment } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, getDocs, query, where, deleteDoc, increment, addDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
@@ -18,7 +18,6 @@ export default function FollowingScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'followers' | 'following'>('following');
-
 
   useEffect(() => {
     fetchUserData();
@@ -50,7 +49,7 @@ export default function FollowingScreen() {
 
   const fetchFollowers = async (followerUids: string[]) => {
     try {
-      const followersData = [];
+      const followersData = [] as any[];
       for (const uid of followerUids) {
         const userDoc = await getDoc(doc(db, 'users', uid));
         if (userDoc.exists()) {
@@ -65,18 +64,18 @@ export default function FollowingScreen() {
 
   const fetchFollowing = async (followingUids: string[]) => {
     try {
-      const followingData = [];
+      const followingData = [] as any[];
       const pendingRequests = currentUser?.pendingFollowRequests || [];
+      const isViewingOwn = auth.currentUser?.uid === userId;
       
       for (const uid of followingUids) {
         const userDoc = await getDoc(doc(db, 'users', uid));
         if (userDoc.exists()) {
           const userData = userDoc.data();
-          const isPendingRequest = pendingRequests.includes(uid);
+          const isPendingRequest = isViewingOwn && pendingRequests.includes(uid);
           
-          // Only include users that are actually following (not pending requests)
-          // unless the current user is viewing their own following list
-          if (!isPendingRequest) {
+          // Include all accepted follows; include pending items only when viewing own list
+          if (!isPendingRequest || isViewingOwn) {
             followingData.push({ 
               id: uid, 
               ...userData,
@@ -142,7 +141,7 @@ export default function FollowingScreen() {
         const targetUserData = targetUserDoc.data();
         
         if (targetUserData?.privacySettings?.profileVisibility === 'private') {
-          // Send follow request
+          // Send follow request (do not change counts)
           await sendFollowRequest(currentUserId, targetUserId);
         } else {
           // Public profile - auto follow
@@ -186,9 +185,14 @@ export default function FollowingScreen() {
       // Add to notifications collection
       await addDoc(collection(db, 'notifications'), notificationData);
       
-      // Add to user's pending requests
+      // Add to target user's pending requests (track that they have a request from me)
       await updateDoc(doc(db, 'users', toUserId), {
         pendingFollowRequests: arrayUnion(fromUserId)
+      });
+
+      // Track my own pending request, so I can see it in my Following list
+      await updateDoc(doc(db, 'users', fromUserId), {
+        pendingFollowRequests: arrayUnion(toUserId)
       });
 
       Alert.alert('Follow Request Sent', 'Your follow request has been sent!');
@@ -225,12 +229,26 @@ export default function FollowingScreen() {
     return styles.followButton;
   };
 
+  const getFollowButtonTextStyle = (targetUserId: string) => {
+    if (!currentUser) return styles.followButtonText;
+    
+    const isFollowing = currentUser.followingUids?.includes(targetUserId);
+    const isFollowedBy = currentUser.followerUids?.includes(targetUserId);
+    const isPendingRequest = currentUser.pendingFollowRequests?.includes(targetUserId);
+    
+    if (isPendingRequest) return styles.pendingRequestButtonText;
+    if (isFollowing && isFollowedBy) return styles.friendsButtonText;
+    if (isFollowing) return styles.followingButtonText;
+    return styles.followButtonText;
+  };
+
   const filteredUsers = (activeTab === 'followers' ? followers : following).filter(user =>
     user.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-
+  const isViewingOwn = auth.currentUser?.uid === userId;
+  const followingCountDisplay = isViewingOwn ? following.filter(u => !u.isPendingRequest).length : following.length;
 
   const renderUserItem = ({ item }: { item: any }) => (
     <TouchableOpacity 
@@ -258,7 +276,7 @@ export default function FollowingScreen() {
             handleFollowToggle(item.id);
           }}
         >
-          <Text style={styles.followButtonText}>
+          <Text style={getFollowButtonTextStyle(item.id)}>
             {getFollowButtonText(item.id)}
           </Text>
         </TouchableOpacity>
@@ -294,8 +312,6 @@ export default function FollowingScreen() {
         </TouchableOpacity>
       </View>
 
-
-
       {/* Stats Bar */}
       <View style={styles.statsBar}>
         <TouchableOpacity 
@@ -311,7 +327,7 @@ export default function FollowingScreen() {
           onPress={() => setActiveTab('following')}
         >
           <Text style={[styles.statText, activeTab === 'following' && styles.activeStatText]}>
-            Following {following.length}
+            Following {followingCountDisplay}
           </Text>
         </TouchableOpacity>
       </View>
@@ -498,6 +514,21 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   followButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  followingButtonText: {
+    color: '#222',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  friendsButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  pendingRequestButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',

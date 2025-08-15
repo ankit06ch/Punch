@@ -274,6 +274,13 @@ export default function UserProfileScreen() {
     return styles.followButton;
   };
 
+  const getFollowButtonTextStyle = () => {
+    if (followButtonLoading) return styles.followButtonText;
+    if (isFollowing) return styles.followingButtonText;
+    if (followRequestSent) return styles.requestSentButtonText;
+    return styles.followButtonText;
+  };
+
   if (!auth.currentUser) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -364,7 +371,7 @@ export default function UserProfileScreen() {
                   onPress={handleFollow}
                   disabled={followButtonLoading}
                 >
-                  <Text style={styles.followButtonText}>{getFollowButtonText()}</Text>
+                  <Text style={getFollowButtonTextStyle()}>{getFollowButtonText()}</Text>
                 </TouchableOpacity>
               )}
             </BlurView>
@@ -396,7 +403,7 @@ export default function UserProfileScreen() {
                   {followButtonLoading ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
-                    <Text style={styles.followButtonText}>{getFollowButtonText()}</Text>
+                    <Text style={getFollowButtonTextStyle()}>{getFollowButtonText()}</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -607,6 +614,16 @@ const styles = StyleSheet.create({
   },
   followButtonText: { 
     color: 'white', 
+    fontSize: 16, 
+    fontWeight: 'bold' 
+  },
+  followingButtonText: { 
+    color: ORANGE, 
+    fontSize: 16, 
+    fontWeight: 'bold' 
+  },
+  requestSentButtonText: { 
+    color: COLORS.text.primary, 
     fontSize: 16, 
     fontWeight: 'bold' 
   },

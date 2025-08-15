@@ -7,10 +7,11 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ActivityIndicator,
   findNodeHandle,
+  ImageBackground,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../../firebase/config';
@@ -31,6 +32,29 @@ export default function ChatScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
   const contentRef = useRef<View | null>(null);
   const messageRefs = useRef<Record<string, View | null>>({});
+  const [peerName, setPeerName] = useState<string | null>(null);
+  const [peerUsername, setPeerUsername] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadPeer = async () => {
+      try {
+        if (conversationId && conversationId !== 'puncho_bot') {
+          const userDoc = await getDoc(doc(db, 'users', String(conversationId)));
+          if (userDoc.exists()) {
+            const d: any = userDoc.data();
+            setPeerName(d.name || null);
+            setPeerUsername(d.username || null);
+          }
+        } else {
+          setPeerName('Puncho');
+          setPeerUsername(null);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    loadPeer();
+  }, [conversationId]);
 
   useEffect(() => {
     if (conversationId) {
@@ -153,8 +177,8 @@ export default function ChatScreen() {
             }));
             
             // Combine and sort all messages
-            const allMessages = [...fromPunchoMessages, ...toPunchoMessages];
-            setMessages(allMessages.sort((a, b) => a.timestamp?.toDate() - b.timestamp?.toDate()));
+            const allMessages: any[] = [...fromPunchoMessages as any, ...toPunchoMessages as any] as any;
+            setMessages(allMessages.sort((a: any, b: any) => a.timestamp?.toDate() - b.timestamp?.toDate()));
           });
           
           return unsubscribeToPuncho;
@@ -177,7 +201,7 @@ export default function ChatScreen() {
             id: doc.id,
             ...doc.data()
           }));
-          setMessages(messageList.sort((a, b) => a.timestamp?.toDate() - b.timestamp?.toDate()));
+          setMessages((messageList as any).sort((a: any, b: any) => a.timestamp?.toDate() - b.timestamp?.toDate()));
         });
         
         return unsubscribe;
@@ -200,25 +224,26 @@ export default function ChatScreen() {
           type: 'puncho_reply',
           fromUserId: auth.currentUser?.uid,
           toUserId: auth.currentUser?.uid,
+          message: chatInput.trim(),
           timestamp: serverTimestamp(),
           read: false,
-          message: chatInput.trim(),
-          senderName: 'You',
-          senderAvatar: null
         });
       } else {
-        // Send to friend (store in messages collection)
+        const messagesRef = collection(db, 'messages');
         const chatId = [auth.currentUser?.uid, conversationId].sort().join('_');
-        await addDoc(collection(db, 'messages'), {
+        await addDoc(messagesRef, {
           chatId,
           fromUserId: auth.currentUser?.uid,
           toUserId: conversationId,
-          timestamp: serverTimestamp(),
           message: chatInput.trim(),
-          read: false, // Messages start as unread
+          timestamp: serverTimestamp(),
+          read: false,
         });
       }
       setChatInput('');
+      setTimeout(() => {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      }, 50);
     } catch (error) {
       console.error('Error sending message:', error);
     } finally {
@@ -226,47 +251,20 @@ export default function ChatScreen() {
     }
   };
 
-  const handleFollowRequestResponse = async (notificationId: string, response: 'accept' | 'deny') => {
+  const handleFollowRequestResponse = async (requesterId: string, action: 'accept' | 'deny') => {
     try {
-      // Get the notification to find the requester
-      const notificationRef = doc(db, 'notifications', notificationId);
-      const notificationSnap = await getDoc(notificationRef);
-      
-      if (!notificationSnap.exists()) return;
-      
-      const notificationData = notificationSnap.data();
-      const requesterId = notificationData.fromUserId;
       const currentUserId = auth.currentUser?.uid;
-      
-      if (!currentUserId || !requesterId) return;
+      if (!currentUserId) return;
 
-      // Update notification status
-      await updateDoc(notificationRef, {
-        status: response,
-        read: true
-      });
-
-      if (response === 'accept') {
-        // Add each user to the other's following/followers lists
+      if (action === 'accept') {
+        // Add to follower list and send notification
         await updateDoc(doc(db, 'users', currentUserId), {
-          followingUids: arrayUnion(requesterId),
-          followingCount: (await getDoc(doc(db, 'users', currentUserId))).data()?.followingCount + 1 || 1,
+          followerUids: arrayUnion(requesterId)
         });
         
-        await updateDoc(doc(db, 'users', requesterId), {
-          followerUids: arrayUnion(currentUserId),
-          followersCount: (await getDoc(doc(db, 'users', requesterId))).data()?.followersCount + 1 || 1,
-        });
-
-        // Remove from pending requests
-        await updateDoc(doc(db, 'users', currentUserId), {
-          pendingFollowRequests: arrayRemove(requesterId)
-        });
-
-        // Send acceptance message to requester
         await addDoc(collection(db, 'notifications'), {
           type: 'follow_request_accepted',
-          fromUserId: 'puncho_bot',
+          fromUserId: currentUserId,
           toUserId: requesterId,
           timestamp: serverTimestamp(),
           read: false,
@@ -298,13 +296,26 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push('/authenticated_tabs/profile?showMessages=true')} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={26} color={ORANGE} />
-        </TouchableOpacity>
-        <Text style={styles.title}>{name || 'Chat'}</Text>
-      </View>
+      <ImageBackground
+        source={require('../../assets/images/login:signup/bg.png')}
+        style={{ flex: 1 }}
+        resizeMode="cover"
+        imageStyle={{ opacity: 0.4 }}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.push('/authenticated_tabs/profile?showMessages=true')} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={26} color={ORANGE} />
+          </TouchableOpacity>
+          <View style={styles.titleContainer}>
+            <Text style={styles.title} numberOfLines={1}>
+              {peerName || (typeof name === 'string' ? name : 'Chat')}
+            </Text>
+            {!!conversationId && conversationId !== 'puncho_bot' && (
+              <Text style={styles.subtitle} numberOfLines={1}>@{peerUsername || name}</Text>
+            )}
+          </View>
+        </View>
 
       {/* Messages */}
       <KeyboardAvoidingView
@@ -339,7 +350,6 @@ export default function ChatScreen() {
             
             return (
               <View
-                ref={(el) => { if (el) { messageRefs.current[msg.id] = el; } }}
                 key={msg.id || idx}
                 style={[
                   styles.messageBubble,
@@ -347,6 +357,7 @@ export default function ChatScreen() {
                   isPuncho ? styles.punchoMessage : null,
                   isFollowRequest ? styles.followRequestMessage : null,
                 ]}
+                ref={(el) => { if (msg.id) messageRefs.current[msg.id] = el; }}
               >
                 <Text style={[styles.messageText, isOutgoing || isPuncho ? { color: '#fff' } : null]}>
                   {msg.message}
@@ -357,31 +368,26 @@ export default function ChatScreen() {
                   <View style={styles.followRequestButtons}>
                     <TouchableOpacity
                       style={styles.acceptButton}
-                      onPress={() => handleFollowRequestResponse(msg.id, 'accept')}
+                      onPress={() => handleFollowRequestResponse(msg.fromUserId, 'accept')}
                     >
                       <Text style={styles.acceptButtonText}>Accept</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.denyButton}
-                      onPress={() => handleFollowRequestResponse(msg.id, 'deny')}
+                      onPress={() => handleFollowRequestResponse(msg.fromUserId, 'deny')}
                     >
                       <Text style={styles.denyButtonText}>Deny</Text>
                     </TouchableOpacity>
                   </View>
                 )}
                 
-                <View style={styles.messageFooter}>
+                <View style={[
+                  styles.messageFooter,
+                  isOutgoing ? styles.outgoingMessageFooter : styles.incomingMessageFooter
+                ]}>
                   <Text style={[styles.messageTime, isOutgoing || isPuncho ? { color: 'rgba(255,255,255,0.7)' } : null]}>
-                    {msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                    {msg.timestamp?.toDate ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                   </Text>
-                  {isOutgoing && (
-                    <Ionicons 
-                      name={msg.read ? "checkmark-done" : "checkmark"} 
-                      size={16} 
-                      color={msg.read ? (isOutgoing ? 'rgba(255,255,255,0.9)' : '#4CAF50') : 'rgba(255,255,255,0.5)'} 
-                      style={{ marginLeft: 4 }}
-                    />
-                  )}
                 </View>
               </View>
             );
@@ -392,28 +398,21 @@ export default function ChatScreen() {
           </View>
         </ScrollView>
 
-        {/* Input Bar */}
+        {/* Input */}
         <View style={styles.inputBar}>
           <TextInput
             style={styles.input}
-            placeholder="Type a message..."
-            placeholderTextColor="#666"
             value={chatInput}
             onChangeText={setChatInput}
-            editable={!sending}
-            onSubmitEditing={sendMessage}
-            returnKeyType="send"
-            multiline
+            placeholder="Type a message..."
+            placeholderTextColor="#aaa"
           />
-          <TouchableOpacity
-            style={styles.sendButton}
-            onPress={sendMessage}
-            disabled={sending || !chatInput.trim()}
-          >
-            <Ionicons name="send" size={22} color={chatInput.trim() ? ORANGE : '#ccc'} />
+          <TouchableOpacity style={styles.sendButton} onPress={sendMessage} disabled={sending}>
+            <Ionicons name="send" size={20} color={ORANGE} />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+      </ImageBackground>
     </SafeAreaView>
   );
 }
@@ -429,122 +428,97 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
+    marginTop: 8,
     color: '#666',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
     backgroundColor: '#fff',
   },
   backButton: {
-    marginRight: 16,
+    padding: 6,
+    marginRight: 8,
+  },
+  titleContainer: {
+    flex: 1,
+    alignItems: 'center',
+    marginLeft: -40,
   },
   title: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#222',
+  },
+  subtitle: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
   },
   keyboardView: {
     flex: 1,
   },
   messagesContainer: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
   },
   messagesContent: {
-    padding: 16,
-    paddingBottom: 20,
+    padding: 12,
+    paddingBottom: 24,
   },
   messageBubble: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 8,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
     maxWidth: '80%',
     alignSelf: 'flex-start',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    marginHorizontal: 8,
   },
   outgoingMessage: {
     backgroundColor: ORANGE,
     alignSelf: 'flex-end',
+    borderBottomRightRadius: 4,
   },
   punchoMessage: {
-    backgroundColor: '#ffa366',
+    backgroundColor: ORANGE,
+    borderLeftWidth: 4,
+    borderLeftColor: ORANGE,
     alignSelf: 'flex-start',
+    borderBottomLeftRadius: 4,
   },
   messageText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#222',
-    lineHeight: 20,
-  },
-  messageTime: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
   },
   messageFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
     marginTop: 4,
+    alignItems: 'flex-end',
   },
-  emptyText: {
-    textAlign: 'center',
-    color: '#888',
-    fontSize: 16,
-    marginTop: 40,
+  outgoingMessageFooter: {
+    alignItems: 'flex-end',
   },
-  followRequestMessage: {
-    backgroundColor: '#fff3cd',
-    borderLeftWidth: 4,
-    borderLeftColor: '#ffc107',
+  incomingMessageFooter: {
+    alignItems: 'flex-start',
   },
-  followRequestButtons: {
-    flexDirection: 'row',
-    marginTop: 12,
-    gap: 8,
-  },
-  acceptButton: {
-    backgroundColor: '#28a745',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    flex: 1,
-    alignItems: 'center',
-  },
-  acceptButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  denyButton: {
-    backgroundColor: '#dc3545',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    flex: 1,
-    alignItems: 'center',
-  },
-  denyButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
+  messageTime: {
+    fontSize: 11,
+    color: '#aaa',
   },
   inputBar: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 16,
+    paddingBottom: 32,
+    marginBottom: 0,
     borderTopWidth: 1,
     borderTopColor: '#eee',
     backgroundColor: '#fff',
@@ -555,12 +529,50 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
     borderRadius: 20,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginRight: 12,
-    maxHeight: 100,
+    paddingVertical: 8,
+    marginRight: 8,
     color: '#222',
   },
   sendButton: {
     padding: 8,
+  },
+  followRequestMessage: {
+    backgroundColor: '#fff8e1',
+    borderLeftColor: '#ffcc00',
+    borderLeftWidth: 4,
+  },
+  followRequestButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 8,
+  },
+  acceptButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  acceptButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  denyButton: {
+    backgroundColor: '#f44336',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  denyButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#888',
+    fontSize: 16,
+    marginTop: 40,
   },
 }); 

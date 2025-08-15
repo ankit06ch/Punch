@@ -230,6 +230,19 @@ export default function FollowersScreen() {
     return styles.followButton;
   };
 
+  const getFollowButtonTextStyle = (targetUserId: string) => {
+    if (!currentUser) return styles.followButtonText;
+    
+    const isFollowing = currentUser.followingUids?.includes(targetUserId);
+    const isFollowedBy = currentUser.followerUids?.includes(targetUserId);
+    const isPendingRequest = currentUser.pendingFollowRequests?.includes(targetUserId);
+    
+    if (isPendingRequest) return styles.pendingRequestButtonText;
+    if (isFollowing && isFollowedBy) return styles.friendsButtonText;
+    if (isFollowing) return styles.followingButtonText;
+    return styles.followButtonText;
+  };
+
   const filteredUsers = (activeTab === 'followers' ? followers : following).filter(user =>
     user.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.name?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -287,7 +300,7 @@ export default function FollowersScreen() {
             handleFollowToggle(item.id);
           }}
         >
-          <Text style={styles.followButtonText}>
+          <Text style={getFollowButtonTextStyle(item.id)}>
             {getFollowButtonText(item.id)}
           </Text>
         </TouchableOpacity>
@@ -618,6 +631,21 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   followButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  followingButtonText: {
+    color: '#222',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  friendsButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  pendingRequestButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',

@@ -88,7 +88,7 @@ const loginStyles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8, // Reduced from 16 to 8 to move button higher
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
