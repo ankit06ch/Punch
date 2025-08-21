@@ -3,8 +3,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { View, TouchableOpacity, Image } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import tabBarStyles from '../styles/tabBarStyles';
+import { useRouter } from 'expo-router';
 
 export default function TabsLayout() {
+  const router = useRouter();
+  
+  const handlePunchLogoPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Navigate to NFC tab for both card reading and phone-to-phone connections
+    router.push('/authenticated_tabs/nfc');
+  };
+
   return (
     <Tabs
       screenOptions={{
@@ -32,10 +41,7 @@ export default function TabsLayout() {
           tabBarButton: ({ style, onPress }) => (
             <View style={tabBarStyles.centerButtonWrapper}>
               <TouchableOpacity
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  onPress();
-                }}
+                onPress={handlePunchLogoPress}
                 style={tabBarStyles.centerButton}
               >
                 <Image 
@@ -48,6 +54,7 @@ export default function TabsLayout() {
           ),
         }}
       />
+
       <Tabs.Screen
         name="wallet"
         options={{

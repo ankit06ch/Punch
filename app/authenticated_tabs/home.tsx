@@ -188,6 +188,7 @@ export default function Home() {
   const [liked, setLiked] = useState<string[]>([]);
   const [giftBoxVisible, setGiftBoxVisible] = useState(false);
   const [selectedReward, setSelectedReward] = useState<any>(null);
+  const [userPunchCards, setUserPunchCards] = useState<{[key: string]: number}>({});
   const router = useRouter();
 
   // Fetch user data with real-time listener
@@ -204,6 +205,7 @@ export default function Home() {
         setName(userData.name || '');
         setPunches(userData.punches || 0);
         setFavorites(userData.favorites || []);
+        setUserPunchCards(userData.punchCards || {}); // Get real punch card data
       }
       setLoadingUser(false);
     }, (error) => {
@@ -258,18 +260,18 @@ export default function Home() {
     .map(card => ({
       ...card,
       businessName: (card as any).businessName || (card as any).name || 'Business',
-      punches: Math.floor(Math.random() * (((card as any).total || 10) - 1 + 1)) + 1,
+      punches: userPunchCards[card.id] || 0, // Use real punch data from user profile
       total: (card as any).total || 10,
       logo: (card as any).logoUrl ? { uri: (card as any).logoUrl } : undefined,
     }))
-    .filter(card => card.punches > 0); // Only show cards that have punches
+    ; // Show all liked restaurants, even with 0 punches
 
   // If no favorite cards, show some sample cards for demonstration
   if (favoriteCards.length === 0 && restaurants.length > 0) {
     favoriteCards = restaurants.slice(0, 4).map(card => ({
       ...card,
       businessName: (card as any).businessName || (card as any).name || 'Business',
-      punches: Math.floor(Math.random() * (((card as any).total || 10) - 1 + 1)) + 1,
+      punches: userPunchCards[card.id] || 0, // Use real punch data
       total: (card as any).total || 10,
       logo: (card as any).logoUrl ? { uri: (card as any).logoUrl } : undefined,
     }));

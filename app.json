@@ -39,11 +39,20 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ankitc.punch",
+      "bundleIdentifier": "com.punchrewards.punchrewards",
       "associatedDomains": [
         "applinks:punchrewards.app",
         "applinks:www.punchrewards.app"
-      ]
+      ],
+      "infoPlist": {
+        "NFCReaderUsageDescription": "This app uses NFC to read restaurant loyalty cards and rewards tags.",
+        "NSNearbyInteractionUsageDescription": "This app uses nearby interaction to enhance NFC scanning.",
+        "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect with nearby devices.",
+        "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to connect with nearby devices."
+      },
+      "entitlements": {
+        "com.apple.developer.nfc.readersession.formats": ["NDEF"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -51,7 +60,14 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.ankitc.punch",
+      "package": "com.punchrewards.punchrewards",
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
       "intentFilters": [
         {
           "action": "VIEW",

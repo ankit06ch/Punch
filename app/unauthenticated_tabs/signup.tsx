@@ -29,13 +29,13 @@ export default function SignupScreen() {
     pricing: '',
     address: '',
     hours: {
-      monday: { isOpen: true, slots: [{ open: '09:00', close: '17:00' }] },
-      tuesday: { isOpen: true, slots: [{ open: '09:00', close: '17:00' }] },
-      wednesday: { isOpen: true, slots: [{ open: '09:00', close: '17:00' }] },
-      thursday: { isOpen: true, slots: [{ open: '09:00', close: '17:00' }] },
-      friday: { isOpen: true, slots: [{ open: '09:00', close: '17:00' }] },
-      saturday: { isOpen: true, slots: [{ open: '09:00', close: '17:00' }] },
-      sunday: { isOpen: true, slots: [{ open: '09:00', close: '17:00' }] },
+      monday: { isOpen: true, slots: [{ open: '9:00 AM', close: '5:00 PM' }] },
+      tuesday: { isOpen: true, slots: [{ open: '9:00 AM', close: '5:00 PM' }] },
+      wednesday: { isOpen: true, slots: [{ open: '9:00 AM', close: '5:00 PM' }] },
+      thursday: { isOpen: true, slots: [{ open: '9:00 AM', close: '5:00 PM' }] },
+      friday: { isOpen: true, slots: [{ open: '9:00 AM', close: '5:00 PM' }] },
+      saturday: { isOpen: true, slots: [{ open: '9:00 AM', close: '5:00 PM' }] },
+      sunday: { isOpen: true, slots: [{ open: '9:00 AM', close: '5:00 PM' }] },
     },
     logo: null as string | null,
   });
@@ -630,6 +630,30 @@ export default function SignupScreen() {
         return;
       }
       
+      // Validate hours data for business users
+      if (isBusiness) {
+        const hasValidHours = Object.values(form.hours).some(day => day.isOpen && day.slots.length > 0);
+        if (!hasValidHours) {
+          setError('Please set operating hours for at least one day.');
+          setLoading(false);
+          return;
+        }
+        
+        // Validate time format (H:MM AM/PM)
+        const timeRegex = /^(1[0-2]|[1-9]):[0-5][0-9]\s?(AM|PM|am|pm)$/;
+        for (const day of Object.values(form.hours)) {
+          if (day.isOpen) {
+            for (const slot of day.slots) {
+              if (!timeRegex.test(slot.open) || !timeRegex.test(slot.close)) {
+                setError('Please enter valid time format (e.g., 9:00 AM, 5:00 PM) for operating hours.');
+                setLoading(false);
+                return;
+              }
+            }
+          }
+        }
+      }
+      
       let user;
       
       if (mode === 'email') {
@@ -835,7 +859,7 @@ export default function SignupScreen() {
                   borderBottomRightRadius: 0,
                   paddingHorizontal: 32,
                   paddingTop: 32,
-                  paddingBottom: 0,
+                  paddingBottom: 32,
                   flex: 1,
                   shadowColor: '#000',
                   shadowOffset: { width: 0, height: -15 },
@@ -843,7 +867,7 @@ export default function SignupScreen() {
                   shadowRadius: 25,
                   elevation: 25,
                   alignItems: 'center',
-                  justifyContent: 'flex-start',
+                  justifyContent: 'space-between',
                   width: '100%',
                   overflow: 'hidden',
                   backgroundColor: '#FFFFFF',
@@ -902,6 +926,7 @@ export default function SignupScreen() {
                   form={form}
                   agree={agree}
                   profilePicture={profilePicture}
+                  showLoadingScreen={showLoadingScreen}
                   onNext={handleNext}
                   onBack={handleBack}
                   onSignup={handleSignup}

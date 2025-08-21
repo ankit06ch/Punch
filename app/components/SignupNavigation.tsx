@@ -12,6 +12,7 @@ interface SignupNavigationProps {
   form: any;
   agree: boolean;
   profilePicture: string | null;
+  showLoadingScreen: boolean;
   onNext: () => void;
   onBack: () => void;
   onSignup: () => void;
@@ -26,12 +27,18 @@ export default function SignupNavigation({
   form,
   agree,
   profilePicture,
+  showLoadingScreen,
   onNext,
   onBack,
   onSignup,
   onStartLoadingSequence
 }: SignupNavigationProps) {
   if (steps.length === 0) {
+    return null;
+  }
+
+  // Hide buttons during loading screen
+  if (showLoadingScreen) {
     return null;
   }
 
@@ -99,7 +106,7 @@ export default function SignupNavigation({
             <CustomText variant="button" weight="bold" fontFamily="figtree" style={signupStyles.secondaryButtonText}>Back</CustomText>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[loginStyles.loginButton, (loading || form.cuisine.length === 0) && loginStyles.loginButtonDisabled]}
+            style={[loginStyles.loginButton, { flex: 1, marginLeft: 6 }, (loading || form.cuisine.length === 0) && loginStyles.loginButtonDisabled]}
             onPress={onNext}
             disabled={loading || form.cuisine.length === 0}
           >
@@ -119,7 +126,7 @@ export default function SignupNavigation({
             <CustomText variant="button" weight="bold" fontFamily="figtree" style={signupStyles.secondaryButtonText}>Back</CustomText>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[loginStyles.loginButton, (loading || !form.pricing || form.pricing.trim().length === 0) && loginStyles.loginButtonDisabled]}
+            style={[loginStyles.loginButton, { flex: 1, marginLeft: 6 }, (loading || !form.pricing || form.pricing.trim().length === 0) && loginStyles.loginButtonDisabled]}
             onPress={onNext}
             disabled={loading || !form.pricing || form.pricing.trim().length === 0}
           >
@@ -139,7 +146,7 @@ export default function SignupNavigation({
             <CustomText variant="button" weight="bold" fontFamily="figtree" style={signupStyles.secondaryButtonText}>Back</CustomText>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[loginStyles.loginButton, (loading || !form.address || form.address.trim().length === 0) && loginStyles.loginButtonDisabled]}
+            style={[loginStyles.loginButton, { flex: 1, marginLeft: 6 }, (loading || !form.address || form.address.trim().length === 0) && loginStyles.loginButtonDisabled]}
             onPress={onNext}
             disabled={loading || !form.address || form.address.trim().length === 0}
           >
@@ -239,7 +246,7 @@ export default function SignupNavigation({
   };
 
   return (
-    <View style={{ width: '100%', marginTop: 16 }}>
+    <View style={{ width: '100%', marginTop: 0 }}>
       {renderButtons()}
     </View>
   );

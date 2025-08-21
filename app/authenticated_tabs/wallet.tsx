@@ -469,6 +469,7 @@ export default function Wallet() {
   const [cardToDelete, setCardToDelete] = useState<any>(null);
   const [shakingCards, setShakingCards] = useState<Set<string>>(new Set());
   const [liked, setLiked] = useState<string[]>([]);
+  const [userPunchCards, setUserPunchCards] = useState<{[key: string]: number}>({});
   const flatListRef = useRef<FlatList<any>>(null);
 
   useEffect(() => {
@@ -482,7 +483,7 @@ export default function Wallet() {
           id: doc.id,
           ...doc.data(),
           color: CARD_COLORS[doc.id.charCodeAt(0) % CARD_COLORS.length], // Consistent color based on ID
-          punches: Math.floor(Math.random() * 10) + 1,
+          punches: 0, // Will be updated with real data from user profile
         }));
         setRestaurants(data);
       } catch (error) {
@@ -505,6 +506,7 @@ export default function Wallet() {
       if (doc.exists()) {
         const userData = doc.data();
         setLiked(userData.likedRestaurants || []);
+        setUserPunchCards(userData.punchCards || {}); // Get real punch card data
       }
     }, (error: any) => {
       console.error('Error listening to liked restaurants:', error);
@@ -512,6 +514,18 @@ export default function Wallet() {
 
     return () => unsubscribe();
   }, []);
+
+  // Update restaurants with real punch data when userPunchCards changes
+  useEffect(() => {
+    if (Object.keys(userPunchCards).length > 0) {
+      setRestaurants(prevRestaurants => 
+        prevRestaurants.map(restaurant => ({
+          ...restaurant,
+          punches: userPunchCards[restaurant.id] || 0
+        }))
+      );
+    }
+  }, [userPunchCards]);
 
   // Filter restaurants based on search and filter
   const filteredRestaurants = restaurants.filter(restaurant => {

@@ -1,9 +1,13 @@
 import React from 'react';
-import { View, TextInput, TouchableOpacity, ActivityIndicator, Switch, Animated } from 'react-native';
+import { View, TextInput, TouchableOpacity, ActivityIndicator, Switch, Animated, ScrollView } from 'react-native';
 import { AntDesign, Feather } from '@expo/vector-icons';
 import CustomText from '../../components/CustomText';
 import loginStyles from '../styles/loginStyles';
 import signupStyles from '../styles/signupStyles';
+
+// Google Places API configuration
+const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
+const GOOGLE_PLACES_BASE_URL = 'https://maps.googleapis.com/maps/api/place/autocomplete/json';
 
 interface SignupFormProps {
   current: any;
@@ -78,6 +82,157 @@ export default function SignupForm({
   onRemoveLogo,
   formatPhoneNumber
 }: SignupFormProps) {
+  // Address search state
+  const [addressSuggestions, setAddressSuggestions] = React.useState<string[]>([]);
+  const [addressSearching, setAddressSearching] = React.useState(false);
+  const [placeDetails, setPlaceDetails] = React.useState<any>(null);
+  const [placeIds, setPlaceIds] = React.useState<string[]>([]);
+  const [lastSearchQuery, setLastSearchQuery] = React.useState<string>('');
+  
+  // Debounce timer for address search
+  const searchTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Address search function using Google Places API
+  const searchAddresses = async (query: string) => {
+    if (query.length < 2) { // Reduced from 3 to 2 characters for earlier results
+      setAddressSuggestions([]);
+      return;
+    }
+
+    if (!GOOGLE_PLACES_API_KEY) {
+      setAddressSuggestions(['Google Places API key not configured. Please check your environment variables.']);
+      return;
+    }
+
+    setAddressSearching(true);
+    
+    try {
+      // Use a single, comprehensive search strategy instead of multiple strategies
+      const params = new URLSearchParams({
+        input: query,
+        key: GOOGLE_PLACES_API_KEY,
+        language: 'en'
+        // Removed sessiontoken and strictbounds that were causing viewport issues
+      });
+
+      const response = await fetch(`${GOOGLE_PLACES_BASE_URL}?${params}`);
+      const data = await response.json();
+
+      if (data.status === 'OK' && data.predictions && data.predictions.length > 0) {
+        // Extract formatted addresses and place IDs from predictions
+        const suggestions = data.predictions.map((prediction: any) => prediction.description);
+        const ids = data.predictions.map((prediction: any) => prediction.place_id);
+        
+        setAddressSuggestions(suggestions);
+        setPlaceIds(ids);
+        
+        console.log('✅ Address search successful:', suggestions.length, 'results');
+        console.log('Query:', query);
+        console.log('First few suggestions:', suggestions.slice(0, 3));
+      } else if (data.status === 'ZERO_RESULTS') {
+        console.log('❌ No address suggestions found for query:', query);
+        setAddressSuggestions(['No addresses found. Try a different search term.']);
+      } else if (data.status === 'INVALID_REQUEST') {
+        console.error('Google Places API invalid request:', data.error_message);
+        // Try a simpler search without problematic parameters
+        console.log('🔄 Retrying with simplified search...');
+        await retrySimpleSearch(query);
+      } else if (data.status === 'OVER_QUERY_LIMIT') {
+        console.error('Google Places API quota exceeded');
+        setAddressSuggestions(['Search quota exceeded. Please try again later.']);
+      } else if (data.status === 'REQUEST_DENIED') {
+        console.error('Google Places API request denied:', data.error_message);
+        setAddressSuggestions(['API access denied. Please check your configuration.']);
+      } else {
+        console.error('Google Places API error:', data.status, data.error_message);
+        setAddressSuggestions([`Search error: ${data.status}. Please try again.`]);
+      }
+      
+    } catch (error) {
+      console.error('Address search error:', error);
+      setAddressSuggestions(['Network error. Please check your connection.']);
+    } finally {
+      setAddressSearching(false);
+    }
+  };
+
+  // Fallback search function with minimal parameters
+  const retrySimpleSearch = async (query: string) => {
+    if (!GOOGLE_PLACES_API_KEY) {
+      console.error('Google Places API key not configured');
+      setAddressSuggestions(['API key not configured. Please check your environment variables.']);
+      return;
+    }
+
+    try {
+      console.log('🔄 Attempting simplified search for:', query);
+      
+      const params = new URLSearchParams({
+        input: query,
+        key: GOOGLE_PLACES_API_KEY
+        // Minimal parameters to avoid viewport issues
+      });
+
+      const response = await fetch(`${GOOGLE_PLACES_BASE_URL}?${params}`);
+      const data = await response.json();
+
+      if (data.status === 'OK' && data.predictions && data.predictions.length > 0) {
+        const suggestions = data.predictions.map((prediction: any) => prediction.description);
+        const ids = data.predictions.map((prediction: any) => prediction.place_id);
+        
+        setAddressSuggestions(suggestions);
+        setPlaceIds(ids);
+        
+        console.log('✅ Simplified search successful:', suggestions.length, 'results');
+        console.log('First few suggestions:', suggestions.slice(0, 3));
+      } else {
+        console.log('❌ Simplified search also failed:', data.status);
+        setAddressSuggestions(['Search failed. Please try a different address.']);
+      }
+    } catch (error) {
+      console.error('Simplified search error:', error);
+      setAddressSuggestions(['Search error. Please try again.']);
+    }
+  };
+
+  // Get detailed information about a selected place
+  const getPlaceDetails = async (placeId: string) => {
+    if (!GOOGLE_PLACES_API_KEY) {
+      console.error('Google Places API key not configured');
+      return null;
+    }
+
+    try {
+      const params = new URLSearchParams({
+        place_id: placeId,
+        key: GOOGLE_PLACES_API_KEY,
+        fields: 'formatted_address,geometry,name,place_id,types,business_status,rating,user_ratings_total,vicinity'
+      });
+
+      const response = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?${params}`);
+      const data = await response.json();
+
+      if (data.status === 'OK' && data.result) {
+        console.log('Place details retrieved:', data.result);
+        return data.result;
+      } else {
+        console.error('Place details error:', data.status, data.error_message);
+      }
+    } catch (error) {
+      console.error('Error getting place details:', error);
+    }
+    return null;
+  };
+
   // Custom Checkbox
   function CustomCheckbox({ value, onValueChange }: { value: boolean; onValueChange: (v: boolean) => void }) {
     return (
@@ -146,18 +301,23 @@ export default function SignupForm({
 
   if (showLoadingScreen) {
     return (
-      <View style={loginStyles.textContainer}>
-        <View style={{ alignItems: 'center', marginBottom: 20 }}>
-                      <Animated.Image 
-              source={require('../../assets/images/onboarding/onboarding2/10.png')}
-              style={{
-                width: 120,
-                height: 120,
-                resizeMode: 'contain',
-                marginBottom: 16,
-                transform: [{ scale: pulsateAnim }],
-              }}
-            />
+      <View style={{ 
+        flex: 1, 
+        justifyContent: 'center', 
+        alignItems: 'center',
+        paddingHorizontal: 20
+      }}>
+        <View style={{ alignItems: 'center' }}>
+          <Animated.Image 
+            source={require('../../assets/images/onboarding/onboarding2/10.png')}
+            style={{
+              width: 120,
+              height: 120,
+              resizeMode: 'contain',
+              marginBottom: 16,
+              transform: [{ scale: pulsateAnim }],
+            }}
+          />
           <CustomText 
             variant="title" 
             weight="bold" 
@@ -178,7 +338,12 @@ export default function SignupForm({
   }
 
   return (
-    <>
+    <ScrollView 
+      style={{ flex: 1 }} 
+      contentContainerStyle={{ paddingBottom: 20 }}
+      showsVerticalScrollIndicator={true}
+      keyboardShouldPersistTaps="handled"
+    >
       {/* Progress indicator */}
       <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 24, gap: 6 }}>
         {steps.map((_, index) => (
@@ -354,20 +519,254 @@ export default function SignupForm({
 
         {/* Address step */}
         {current.key === 'address' && (
-          <View style={loginStyles.inputContainer}>
-            <AntDesign name="enviroment" size={20} color="#FB7A20" style={loginStyles.inputIcon} />
-            <TextInput
-              placeholder="Business address"
-              style={[loginStyles.input, { fontFamily: 'Figtree_400Regular' }]}
-              value={form.address}
-              onChangeText={text => {
-                setForm({ ...form, address: text });
-                setError('');
-              }}
-              placeholderTextColor="#aaa"
-              editable={!loading}
-              maxLength={100}
-            />
+          <View style={{ width: '100%' }}>
+            <View style={loginStyles.inputContainer}>
+              <AntDesign name="enviroment" size={20} color="#FB7A20" style={loginStyles.inputIcon} />
+              <TextInput
+                placeholder="Start typing your business address..."
+                style={[loginStyles.input, { fontFamily: 'Figtree_400Regular' }]}
+                value={form.address}
+                onChangeText={text => {
+                  setForm({ ...form, address: text });
+                  setError('');
+                  
+                  // Clear suggestions if input is too short
+                  if (text.length < 2) {
+                    setAddressSuggestions([]);
+                    setPlaceIds([]);
+                    return;
+                  }
+                  
+                  // Clear previous timeout and set new one for debounced search
+                  if (searchTimeoutRef.current) {
+                    clearTimeout(searchTimeoutRef.current);
+                  }
+                  
+                  searchTimeoutRef.current = setTimeout(() => {
+                    if (text.length >= 2) {
+                      // Only search if the query has changed significantly (prevents searching for minor variations)
+                      const queryChanged = !lastSearchQuery || 
+                        !text.toLowerCase().includes(lastSearchQuery.toLowerCase()) ||
+                        !lastSearchQuery.toLowerCase().includes(text.toLowerCase());
+                      
+                      if (queryChanged) {
+                        console.log('🔍 Debounced search for address:', text);
+                        setLastSearchQuery(text);
+                        searchAddresses(text);
+                      } else {
+                        console.log('⏭️ Skipping search - query too similar to last search');
+                      }
+                    }
+                  }, 500); // Increased delay to 500ms for more stability
+                }}
+                placeholderTextColor="#aaa"
+                editable={!loading}
+                maxLength={100}
+                autoFocus
+              />
+            </View>
+            
+            {/* Address suggestions */}
+            {addressSuggestions.length > 0 && (
+              <View style={signupStyles.addressSuggestionsContainer}>
+                {/* Search status indicator */}
+                <View style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  backgroundColor: '#f8f9fa',
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#eee'
+                }}>
+                  <CustomText style={{ fontSize: 12, color: '#666', fontStyle: 'italic' }}>
+                    {addressSearching ? '🔍 Searching...' : `📍 ${addressSuggestions.length} address suggestions`}
+                  </CustomText>
+                </View>
+                
+                <ScrollView 
+                  style={{ maxHeight: 250 }} // Allow scrolling within the container
+                  showsVerticalScrollIndicator={true}
+                  nestedScrollEnabled={true}
+                >
+                  {addressSuggestions.map((suggestion, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={signupStyles.addressSuggestionItem}
+                      onPress={async () => {
+                        const selectedPlaceId = placeIds[index];
+                        if (selectedPlaceId) {
+                          const details = await getPlaceDetails(selectedPlaceId);
+                          if (details) {
+                            setPlaceDetails(details);
+                            // Store both the formatted address and additional details
+                            setForm({ 
+                              ...form, 
+                              address: details.formatted_address || suggestion,
+                              placeId: details.place_id,
+                              latitude: details.geometry?.location?.lat,
+                              longitude: details.geometry?.location?.lng
+                            });
+                          } else {
+                            setForm({ ...form, address: suggestion });
+                          }
+                        } else {
+                          setForm({ ...form, address: suggestion });
+                        }
+                        setAddressSuggestions([]);
+                        setPlaceIds([]);
+                      }}
+                      disabled={addressSearching}
+                    >
+                      <AntDesign name="enviroment" size={16} color="#666" style={{ marginRight: 8 }} />
+                      {addressSearching ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                          <ActivityIndicator size="small" color="#FB7A20" style={{ marginRight: 8 }} />
+                          <CustomText 
+                            fontFamily="figtree" 
+                            style={[signupStyles.addressSuggestionText, { color: '#999' }]}
+                          >
+                            Searching...
+                          </CustomText>
+                        </View>
+                      ) : (
+                        <CustomText 
+                          fontFamily="figtree" 
+                          style={signupStyles.addressSuggestionText}
+                          numberOfLines={2}
+                        >
+                          {suggestion}
+                        </CustomText>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Hours step */}
+        {current.key === 'hours' && (
+          <View style={{ width: '100%', height: '100%' }}>
+            {/* Fixed Header */}
+            <View style={signupStyles.hoursHeaderContainer}>
+              <CustomText 
+                fontFamily="figtree" 
+                style={signupStyles.hoursTitle}
+              >
+                Set your business operating hours for each day
+              </CustomText>
+              <CustomText 
+                fontFamily="figtree" 
+                style={signupStyles.hoursSubtitle}
+              >
+                Use 12-hour format (e.g., 9:00 AM, 5:00 PM)
+              </CustomText>
+            </View>
+            
+            {/* Scrollable Hours Content */}
+            <ScrollView 
+              style={signupStyles.hoursScrollContainer}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              contentContainerStyle={{ paddingBottom: 20 }}
+            >
+              {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => (
+                <View key={day} style={signupStyles.hoursDayContainer}>
+                  <View style={signupStyles.hoursDayHeader}>
+                    <CustomText 
+                      fontFamily="figtree" 
+                      style={signupStyles.hoursDayText}
+                    >
+                      {day.charAt(0).toUpperCase() + day.slice(1)}
+                    </CustomText>
+                    <Switch
+                      value={form.hours[day].isOpen}
+                      onValueChange={(value) => {
+                        const newHours = { ...form.hours };
+                        newHours[day].isOpen = value;
+                        if (!value) {
+                          newHours[day].slots = [];
+                        } else if (newHours[day].slots.length === 0) {
+                          newHours[day].slots = [{ open: '9:00 AM', close: '5:00 PM' }];
+                        }
+                        setForm({ ...form, hours: newHours });
+                      }}
+                      thumbColor={form.hours[day].isOpen ? '#FB7A20' : '#ccc'}
+                      trackColor={{ true: '#fcd7b0', false: '#eee' }}
+                    />
+                  </View>
+                  
+                  {form.hours[day].isOpen && (
+                    <View style={signupStyles.hoursSlotsContainer}>
+                      {form.hours[day].slots.map((slot: { open: string; close: string }, slotIndex: number) => (
+                        <View key={slotIndex} style={signupStyles.hoursSlotRow}>
+                          <View style={signupStyles.timeInputContainer}>
+                            <CustomText fontFamily="figtree" style={signupStyles.timeLabel}>Open</CustomText>
+                            <TextInput
+                              style={signupStyles.timeInput}
+                              value={slot.open}
+                              onChangeText={(text) => {
+                                const newHours = { ...form.hours };
+                                newHours[day].slots[slotIndex].open = text;
+                                setForm({ ...form, hours: newHours });
+                              }}
+                              placeholder="9:00 AM"
+                              placeholderTextColor="#aaa"
+                              maxLength={8}
+                              keyboardType="default"
+                            />
+                          </View>
+                          
+                          <View style={signupStyles.timeInputContainer}>
+                            <CustomText fontFamily="figtree" style={signupStyles.timeLabel}>Close</CustomText>
+                            <TextInput
+                              style={signupStyles.timeInput}
+                              value={slot.close}
+                              onChangeText={(text) => {
+                                const newHours = { ...form.hours };
+                                newHours[day].slots[slotIndex].close = text;
+                                setForm({ ...form, hours: newHours });
+                              }}
+                              placeholder="5:00 PM"
+                              placeholderTextColor="#aaa"
+                              maxLength={8}
+                              keyboardType="default"
+                            />
+                          </View>
+                          
+                          {form.hours[day].slots.length > 1 && (
+                            <TouchableOpacity
+                              style={signupStyles.removeSlotButton}
+                              onPress={() => {
+                                const newHours = { ...form.hours };
+                                newHours[day].slots.splice(slotIndex, 1);
+                                setForm({ ...form, hours: newHours });
+                              }}
+                            >
+                              <AntDesign name="minuscircle" size={20} color="#ff4444" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      ))}
+                      
+                      <TouchableOpacity
+                        style={signupStyles.addSlotButton}
+                        onPress={() => {
+                          const newHours = { ...form.hours };
+                          newHours[day].slots.push({ open: '9:00 AM', close: '5:00 PM' });
+                          setForm({ ...form, hours: newHours });
+                        }}
+                      >
+                        <AntDesign name="pluscircle" size={20} color="#FB7A20" />
+                        <CustomText fontFamily="figtree" style={signupStyles.addSlotText}>
+                          Add another time slot
+                        </CustomText>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              ))}
+            </ScrollView>
           </View>
         )}
 
@@ -568,7 +967,7 @@ export default function SignupForm({
             </View>
             
             {/* Terms and Privacy checkbox */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 24 }}>
               <CustomCheckbox value={agree} onValueChange={setAgree} />
               <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                 <CustomText fontFamily="figtree" style={{ color: '#222' }}>I agree to </CustomText>
@@ -580,6 +979,6 @@ export default function SignupForm({
           </>
         )}
       </View>
-    </>
+    </ScrollView>
   );
 } 
