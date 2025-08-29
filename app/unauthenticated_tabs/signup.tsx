@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, fetchSignInMethodsForEmail } from 'firebase/auth';
 import { useRef, useState, useEffect } from 'react';
 import { Animated, Easing, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, View, Dimensions, Keyboard, KeyboardEvent, Linking } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 
 import { auth, db } from '../../firebase/config';
 import { setDoc, doc, query, collection, where, getDocs } from 'firebase/firestore';
@@ -13,6 +14,8 @@ import SignupNavigation from '../components/SignupNavigation';
 import SignupBackground from '../components/SignupBackground';
 import CustomText from '../../components/CustomText';
 import loginStyles from '../styles/loginStyles';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../firebase/config';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -28,6 +31,9 @@ export default function SignupScreen() {
     customCuisine: '',
     pricing: '',
     address: '',
+    placeId: '',
+    latitude: null as number | null,
+    longitude: null as number | null,
     hours: {
       monday: { isOpen: true, slots: [{ open: '9:00 AM', close: '5:00 PM' }] },
       tuesday: { isOpen: true, slots: [{ open: '9:00 AM', close: '5:00 PM' }] },
@@ -38,6 +44,7 @@ export default function SignupScreen() {
       sunday: { isOpen: true, slots: [{ open: '9:00 AM', close: '5:00 PM' }] },
     },
     logo: null as string | null,
+    businessPictures: [] as string[],
   });
   const [mode, setMode] = useState<'email' | 'phone'>('email');
   
@@ -119,6 +126,7 @@ export default function SignupScreen() {
     { key: 'address', prompt: "Where is your business located?", placeholder: '123 Main St, San Francisco, CA', icon: 'enviroment' },
     { key: 'hours', prompt: "What are your operating hours?", icon: 'clockcircle' },
     { key: 'logo', prompt: "Upload your business logo", icon: 'picture' },
+    { key: 'businessPictures', prompt: "Add photos of your business", icon: 'picture' },
   ];
 
   const personalSteps = [
@@ -215,6 +223,19 @@ export default function SignupScreen() {
       console.log('=== EMAIL VALIDATION DEBUG ===');
       console.log('Checking if email exists:', email);
       console.log('Database reference:', db);
+      
+      // First, check directly against Firebase Auth for any sign-in methods
+      // If any methods are returned, the email is already registered.
+      try {
+        const methods = await fetchSignInMethodsForEmail(auth, email);
+        console.log('Auth sign-in methods for email:', methods);
+        if (methods && methods.length > 0) {
+          console.log('Email exists in Firebase Auth');
+          return true;
+        }
+      } catch (authCheckError) {
+        console.warn('fetchSignInMethodsForEmail failed, will fall back to Firestore check:', authCheckError);
+      }
       
       // First, let's test if we can query the database at all
       console.log('Testing database connection...');
@@ -354,8 +375,12 @@ export default function SignupScreen() {
         setIsValidating(false);
       };
       
-      const timeoutId = setTimeout(validateEmail, 500);
+      const timeoutId = setTimeout(validateEmail, 300);
       return () => clearTimeout(timeoutId);
+    } else if (mode === 'email' && !form.email) {
+      // Reset validation state when email is cleared
+      setEmailExists(false);
+      setIsValidating(false);
     }
   }, [form.email, mode]);
 
@@ -372,8 +397,12 @@ export default function SignupScreen() {
         setIsValidating(false);
       };
       
-      const timeoutId = setTimeout(validatePhone, 500);
+      const timeoutId = setTimeout(validatePhone, 300);
       return () => clearTimeout(timeoutId);
+    } else if (mode === 'phone' && !form.phone) {
+      // Reset validation state when phone is cleared
+      setPhoneExists(false);
+      setIsValidating(false);
     }
   }, [form.phone, mode]);
 
@@ -487,6 +516,43 @@ export default function SignupScreen() {
     }
   };
 
+  const handleBusinessPicturePick = async () => {
+    try {
+      setUploadingPicture(true);
+      setError('');
+      
+      // Use ImagePicker directly for business pictures to allow vertical photos
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        setError('Permission denied for media library');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false, // Don't force square aspect ratio
+        quality: 0.9, // Higher quality for business photos
+        allowsMultipleSelection: false,
+      });
+      
+      if (result && !result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        if (asset.uri) {
+          setForm(prev => ({ 
+            ...prev, 
+            businessPictures: [...(prev.businessPictures || []), asset.uri] 
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error picking business picture:', error);
+      setError('Failed to pick business picture. Please try again.');
+    } finally {
+      setUploadingPicture(false);
+    }
+  };
+
   const handleAccountTypeSelect = (business: boolean) => {
     setIsBusiness(business);
     setStep(0);
@@ -514,6 +580,13 @@ export default function SignupScreen() {
           setError('Please enter a valid email address.');
           return;
         }
+        
+        // Wait for email validation to complete
+        if (isValidating) {
+          setError('Please wait for email validation to complete.');
+          return;
+        }
+        
         if (emailExists) {
           setError('This email is already in use. Please choose a different one.');
           return;
@@ -523,6 +596,13 @@ export default function SignupScreen() {
           setError('Please enter a valid phone number.');
           return;
         }
+        
+        // Wait for phone validation to complete
+        if (isValidating) {
+          setError('Please wait for phone validation to complete.');
+          return;
+        }
+        
         if (phoneExists) {
           setError('This phone number is already in use. Please choose a different one.');
           return;
@@ -537,6 +617,19 @@ export default function SignupScreen() {
     if (current.key === 'password') {
       if (!form.password || form.password.length < 6) {
         setError('Password should be at least 6 characters.');
+        return;
+      }
+      if (step < steps.length - 1) {
+        setStep(step + 1);
+      }
+      return;
+    }
+    
+    if (current.key === 'hours') {
+      // For hours step, just validate that at least one day is open
+      const hasOpenDays = Object.values(form.hours).some(day => day.isOpen);
+      if (!hasOpenDays) {
+        setError('Please set operating hours for at least one day.');
         return;
       }
       if (step < steps.length - 1) {
@@ -624,8 +717,8 @@ export default function SignupScreen() {
         }
       }
       
-      if (isBusiness && (!form.businessName || !form.cuisine || !form.pricing || !form.address || !form.hours)) {
-        setError('Please fill in all business information.');
+      if (isBusiness && (!form.businessName || !form.cuisine || !form.pricing || !form.address || !form.address.trim() || !form.hours)) {
+        setError('Please fill in all business information including a valid address.');
         setLoading(false);
         return;
       }
@@ -689,22 +782,67 @@ export default function SignupScreen() {
         }
       }
       
+      // Upload business pictures to Firebase Storage
+      let businessPictureUrls: string[] = [];
+      if (isBusiness && form.businessPictures && form.businessPictures.length > 0) {
+        try {
+          console.log('Uploading business pictures to Firebase Storage...');
+          console.log('Number of pictures to upload:', form.businessPictures.length);
+          
+          const uploadPromises = form.businessPictures.map(async (pictureUri: string, index: number) => {
+            try {
+              console.log(`Processing photo ${index + 1}:`, pictureUri);
+              
+              // Create a reference to business-content/{RestaurantName}/photo_{index}.jpg
+              const fileName = `photo_${index + 1}.jpg`;
+              const storageRef = ref(storage, `business-content/${form.businessName}/${fileName}`);
+              
+              // Convert URI to blob
+              const response = await fetch(pictureUri);
+              const blob = await response.blob();
+              
+              console.log(`Photo ${index + 1} blob size:`, blob.size, 'bytes');
+              
+              // Upload to Firebase Storage with optimized settings
+              const uploadResult = await uploadBytes(storageRef, blob, {
+                contentType: 'image/jpeg',
+                cacheControl: 'public, max-age=31536000', // Cache for 1 year
+                customMetadata: {
+                  'restaurant-name': form.businessName,
+                  'photo-index': (index + 1).toString(),
+                  'upload-timestamp': new Date().toISOString()
+                }
+              });
+              
+              const downloadURL = await getDownloadURL(uploadResult.ref);
+              console.log(`Successfully uploaded photo ${index + 1}:`, downloadURL);
+              return downloadURL;
+            } catch (error) {
+              console.error(`Error uploading photo ${index + 1}:`, error);
+              return null;
+            }
+          });
+          
+          const uploadedUrls = await Promise.all(uploadPromises);
+          businessPictureUrls = uploadedUrls.filter(url => url !== null) as string[];
+          console.log('Successfully uploaded business pictures:', businessPictureUrls);
+          console.log('Total URLs collected:', businessPictureUrls.length);
+        } catch (error) {
+          console.error('Error uploading business pictures:', error);
+        }
+      }
+      
       if (isBusiness) {
+        // Save only user profile data to users collection
         await setDoc(doc(db, 'users', user.uid), {
           uid: user.uid,
           name: form.name,
-          businessName: form.businessName,
-          cuisine: form.cuisine,
-          pricing: form.pricing,
-          address: form.address,
-          hours: form.hours,
-          logoUrl: logoUrl,
-          isBusiness: true,
           contactMethod: mode,
           email: mode === 'email' ? form.email : null,
           phone: mode === 'phone' ? form.phone : null,
           bio: '',
           profilePictureUrl: profilePictureUrl,
+          isBusiness: true,
           storesVisitedCount: 0,
           storesVisitedHistory: [],
           rewardsRedeemed: [],
@@ -715,6 +853,62 @@ export default function SignupScreen() {
           emailNotifications: notifEmail,
           textNotifications: notifText,
         });
+        
+        // Save business data to restaurants collection
+        const restaurantData = {
+          id: user.uid,
+          name: form.businessName,
+          cuisine: form.cuisine,
+          cuisines: form.cuisine,
+          type: form.cuisine,
+          types: form.cuisine,
+          price: form.pricing,
+          hours: form.hours,
+          logoUrl: logoUrl,
+          businessPictures: businessPictureUrls,
+          images: businessPictureUrls, // Add images field for explore page
+          location: form.address,
+          address: form.address, // Keep for backward compatibility
+          isBusiness: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          // Add fields that explore page expects
+          latitude: form.latitude, // Use latitude from form
+          longitude: form.longitude, // Use longitude from form
+          activeRewards: [], // Empty array for now
+          distance: '0.5 mi', // Default distance
+          
+          // ===== RESTAURANT METRICS & ANALYTICS =====
+          // Core Engagement Metrics
+          totalViews: 0,
+          totalLikes: 0,
+          totalShares: 0, // To be implemented for restaurant modal
+          
+          // Weekly & Monthly Tracking
+          weeklyViews: 0,
+          monthlyViews: 0,
+          weeklyLikes: 0,
+          monthlyLikes: 0,
+          
+          // User Lists
+          likedByUsers: [], // Array of user IDs who liked this restaurant
+          
+          // Search Metrics
+          searchImpressions: 0, // How many times shown in search
+          searchClicks: 0, // How many times clicked from search
+          
+          // Timestamps for Analytics
+          firstViewDate: null,
+          lastViewDate: null,
+          firstLikeDate: null,
+          lastLikeDate: null,
+        };
+        
+        console.log('Saving restaurant data:', restaurantData);
+        console.log('Address being saved:', form.address);
+        console.log('Location field being saved:', form.address);
+        await setDoc(doc(db, 'restaurants', user.uid), restaurantData);
+        console.log('Restaurant data saved successfully');
       } else {
         await setDoc(doc(db, 'users', user.uid), {
           uid: user.uid,
@@ -903,6 +1097,7 @@ export default function SignupScreen() {
                   pulsateAnim={pulsateAnim}
                   onProfilePicturePick={handleProfilePicturePick}
                   onLogoPick={handleLogoPick}
+                  onBusinessPicturePick={handleBusinessPicturePick}
                   onRemoveProfilePicture={() => setProfilePicture(null)}
                   onRemoveLogo={() => setForm({ ...form, logo: null })}
                   formatPhoneNumber={formatPhoneNumber}

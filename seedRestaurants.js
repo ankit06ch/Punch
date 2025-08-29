@@ -84,6 +84,12 @@ const cummingRestaurants = [
       }
     ],
     logoUrl: "https://static.spotapps.co/web/alessiosrestaurant–com/custom/logo_v2.png",
+    images: [
+      require('./assets/images/test/360_F_252388016_KjPnB9vglSCuUJAumCDNbmMzGdzPAucK.jpg'),
+      require('./assets/images/test/KC310124-27.webp'),
+      require('./assets/images/test/top-view-table-full-food_23-2149209253.avif'),
+      require('./assets/images/test/istockphoto-1457433817-612x612.jpg')
+    ],
     latitude: 34.2073,
     longitude: -84.1402,
     price: "$$",
@@ -107,6 +113,12 @@ const cummingRestaurants = [
       }
     ],
     logoUrl: "https://images.getbento.com/accounts/0b96449058d495424ae7a8a707fade02/media/images/73901Village_Italian_.png?w=600&fit=max&auto=compress,format&cs=origin&h=600",
+    images: [
+      require('./assets/images/test/360_F_252388016_KjPnB9vglSCuUJAumCDNbmMzGdzPAucK.jpg'),
+      require('./assets/images/test/KC310124-27.webp'),
+      require('./assets/images/test/top-view-table-full-food_23-2149209253.avif'),
+      require('./assets/images/test/istockphoto-1457433817-612x612.jpg')
+    ],
     latitude: 34.2156,
     longitude: -84.1389,
     price: "$$",
@@ -130,6 +142,12 @@ const cummingRestaurants = [
       }
     ],
     logoUrl: "https://tamsbackstage.com/wp-content/uploads/2024/03/BannerLogo-TamsBackStageNEW.png",
+    images: [
+      require('./assets/images/test/360_F_252388016_KjPnB9vglSCuUJAumCDNbmMzGdzPAucK.jpg'),
+      require('./assets/images/test/KC310124-27.webp'),
+      require('./assets/images/test/top-view-table-full-food_23-2149209253.avif'),
+      require('./assets/images/test/istockphoto-1457433817-612x612.jpg')
+    ],
     latitude: 34.2034,
     longitude: -84.1421,
     price: "$$",
@@ -152,6 +170,12 @@ const cummingRestaurants = [
       }
     ],
     logoUrl: "https://popmenucloud.com/cdn-cgi/image/width=300,height=300,format=auto,fit=pad,background=transparent/umqfyitx/36ac8a50-9f7f-4c68-a8ed-36bffd6ea121",
+    images: [
+      require('./assets/images/test/360_F_252388016_KjPnB9vglSCuUJAumCDNbmMzGdzPAucK.jpg'),
+      require('./assets/images/test/KC310124-27.webp'),
+      require('./assets/images/test/top-view-table-full-food_23-2149209253.avif'),
+      require('./assets/images/test/istockphoto-1457433817-612x612.jpg')
+    ],
     latitude: 34.1987,
     longitude: -84.1356,
     price: "$$$",
@@ -174,6 +198,12 @@ const cummingRestaurants = [
       }
     ],
     logoUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT0KMPqn1eRbGH6op3TXtgcUU_U7mmplIwA3Q&s",
+    images: [
+      require('./assets/images/test/360_F_252388016_KjPnB9vglSCuUJAumCDNbmMzGdzPAucK.jpg'),
+      require('./assets/images/test/KC310124-27.webp'),
+      require('./assets/images/test/top-view-table-full-food_23-2149209253.avif'),
+      require('./assets/images/test/istockphoto-1457433817-612x612.jpg')
+    ],
     latitude: 34.2123,
     longitude: -84.1456,
     price: "$$",
@@ -195,7 +225,13 @@ const cummingRestaurants = [
         punchesRequired: 3
       }
     ],
-    logoUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTtueKQOKspGpIDt4hWX6jmlWOqT7Wi2z47Cw&s",
+    logoUrl: require('./assets/images/test/istockphoto-1457433817-612x612.jpg'),
+    images: [
+      require('./assets/images/test/istockphoto-1457433817-612x612.jpg'),
+      require('./assets/images/test/360_F_252388016_KjPnB9vglSCuUJAumCDNbmMzGdzPAucK.jpg'),
+      require('./assets/images/test/KC310124-27.webp'),
+      require('./assets/images/test/top-view-table-full-food_23-2149209253.avif')
+    ],
     latitude: 34.2123,
     longitude: -84.1456,
     price: "$",
@@ -218,6 +254,12 @@ const cummingRestaurants = [
       }
     ],
     logoUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/IHOP_logo.svg/1200px-IHOP_logo.svg.png",
+    images: [
+      require('./assets/images/test/360_F_252388016_KjPnB9vglSCuUJAumCDNbmMzGdzPAucK.jpg'),
+      require('./assets/images/test/KC310124-27.webp'),
+      require('./assets/images/test/top-view-table-full-food_23-2149209253.avif'),
+      require('./assets/images/test/istockphoto-1457433817-612x612.jpg')
+    ],
     latitude: 34.2089,
     longitude: -84.1489,
     price: "$",
@@ -240,6 +282,12 @@ const cummingRestaurants = [
       }
     ],
     logoUrl: "https://upload.wikimedia.org/wikipedia/sco/thumb/b/bf/KFC_logo.svg/2048px-KFC_logo.svg.png",
+    images: [
+      require('./assets/images/test/360_F_252388016_KjPnB9vglSCuUJAumCDNbmMzGdzPAucK.jpg'),
+      require('./assets/images/test/KC310124-27.webp'),
+      require('./assets/images/test/top-view-table-full-food_23-2149209253.avif'),
+      require('./assets/images/test/istockphoto-1457433817-612x612.jpg')
+    ],
     latitude: 34.2012,
     longitude: -84.1523,
     price: "$",
@@ -260,6 +308,12 @@ const cummingRestaurants = [
       }
     ],
     logoUrl: "https://static.wikia.nocookie.net/logopedia/images/9/9e/Krystal_-_1982r.svg/revision/latest/scale-to-width-down/300?cb=20240423042915",
+    images: [
+      require('./assets/images/test/360_F_252388016_KjPnB9vglSCuUJAumCDNbmMzGdzPAucK.jpg'),
+      require('./assets/images/test/KC310124-27.webp'),
+      require('./assets/images/test/top-view-table-full-food_23-2149209253.avif'),
+      require('./assets/images/test/istockphoto-1457433817-612x612.jpg')
+    ],
     latitude: 34.2012,
     longitude: -84.1523,
     price: "$",

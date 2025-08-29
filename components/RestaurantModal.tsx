@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { View, StyleSheet, Dimensions, TouchableOpacity, Text, Animated, Image, PanResponder, ScrollView, Linking } from 'react-native';
+import { View, StyleSheet, Dimensions, TouchableOpacity, Text, Animated, Image, PanResponder, ScrollView, Linking, Share } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { AntDesign } from '@expo/vector-icons';
 import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
@@ -24,6 +24,8 @@ interface Restaurant {
   logoUrl?: string;
   activeRewards?: any[];
   location?: string;
+  address?: string; // Added for backward compatibility
+  cuisines?: string[]; // Added for new logic
 }
 
 interface RestaurantModalProps {
@@ -59,18 +61,84 @@ const DAY_ALIASES: Record<string, string[]> = {
 
 function getHoursForDay(hoursObj: any, canonicalDay: string): string | undefined {
   if (!hoursObj) return undefined;
+  
   // Direct match
-  if (hoursObj[canonicalDay] != null) return hoursObj[canonicalDay];
+  if (hoursObj[canonicalDay] != null) {
+    const hours = hoursObj[canonicalDay];
+    // If it's an object with isOpen property and slots, format the time slots
+    if (typeof hours === 'object' && hours !== null && 'isOpen' in hours) {
+      if (!hours.isOpen) return 'Closed';
+      if (hours.slots && Array.isArray(hours.slots) && hours.slots.length > 0) {
+        return hours.slots.map((slot: { open: string; close: string }) => `${slot.open} - ${slot.close}`).join(', ');
+      }
+      return 'Open';
+    }
+    // If it's already a string, return it
+    if (typeof hours === 'string') {
+      return hours;
+    }
+    // Fallback to string representation
+    return String(hours);
+  }
+  
   // Case-insensitive and alias match
   const aliases = DAY_ALIASES[canonicalDay] || [];
   for (const key of Object.keys(hoursObj)) {
     const lowerKey = String(key).toLowerCase();
     if (lowerKey === canonicalDay.toLowerCase() || aliases.includes(key as string) || aliases.includes(lowerKey)) {
-      return hoursObj[key];
+      const hours = hoursObj[key];
+      // If it's an object with isOpen property and slots, format the time slots
+      if (typeof hours === 'object' && hours !== null && 'isOpen' in hours) {
+        if (!hours.isOpen) return 'Closed';
+        if (hours.slots && Array.isArray(hours.slots) && hours.slots.length > 0) {
+          return hours.slots.map((slot: { open: string; close: string }) => `${slot.open} - ${slot.close}`).join(', ');
+        }
+        return 'Open';
+      }
+      // If it's already a string, return it
+      if (typeof hours === 'string') {
+        return hours;
+      }
+      // Fallback to string representation
+      return String(hours);
     }
   }
   return undefined;
 }
+
+// Share restaurant information
+const shareRestaurant = async (restaurant: Restaurant) => {
+  try {
+    // Format cuisine text
+    let cuisineText = '';
+    if (restaurant.cuisines && Array.isArray(restaurant.cuisines)) {
+      cuisineText = restaurant.cuisines.join(', ');
+    } else if (restaurant.cuisine && typeof restaurant.cuisine === 'string') {
+      cuisineText = restaurant.cuisine
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/^\s+/, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+    
+    const shareMessage = `🍽️ Check out ${restaurant.businessName || restaurant.name}!
+    
+📍 ${restaurant.location || restaurant.address || 'Address not provided'}
+${cuisineText ? `🍕 Cuisine: ${cuisineText}` : ''}
+${restaurant.price ? `💰 Price: ${restaurant.price}` : ''}
+${restaurant.rating ? `⭐ Rating: ${restaurant.rating}` : ''}
+${restaurant.distance ? `📏 ${restaurant.distance} away` : ''}
+
+🥊 Discover this and more great restaurants with Punch!`;
+    
+    await Share.share({
+      message: shareMessage,
+      title: restaurant.businessName || restaurant.name,
+    });
+  } catch (error) {
+    console.error('Error sharing restaurant:', error);
+  }
+};
 
 export default function RestaurantModal({ restaurant, visible, onClose, likedRestaurants, onLikeUpdate }: RestaurantModalProps) {
   const modalAnimation = useRef(new Animated.Value(0)).current;
@@ -259,6 +327,16 @@ export default function RestaurantModal({ restaurant, visible, onClose, likedRes
 
   if (!restaurant) return null;
 
+  // Debug restaurant data
+  console.log('RestaurantModal - Restaurant data:', {
+    id: restaurant.id,
+    name: restaurant.name,
+    businessName: restaurant.businessName,
+    cuisine: restaurant.cuisine,
+    cuisines: restaurant.cuisines,
+    allFields: Object.keys(restaurant)
+  });
+
   return (
     <Animated.View 
       style={[
@@ -350,26 +428,66 @@ export default function RestaurantModal({ restaurant, visible, onClose, likedRes
                 
                 <View style={styles.titleContainer}>
                   <CustomText variant="title" weight="bold" fontFamily="figtree" style={styles.restaurantName}>
-                    {restaurant.name}
+                    {restaurant.businessName || restaurant.name}
                   </CustomText>
                   <View style={styles.titleRow}>
-                    {restaurant.cuisine && (
-                      <CustomText variant="body" weight="normal" fontFamily="figtree" style={styles.cuisine}>
-                        {restaurant.cuisine}
-                      </CustomText>
-                    )}
+                    {(() => {
+                      // Handle both cuisine and cuisines fields, format properly
+                      let cuisineText = '';
+                      if (restaurant.cuisines && Array.isArray(restaurant.cuisines)) {
+                        cuisineText = restaurant.cuisines.join(', ');
+                      } else if (restaurant.cuisine && typeof restaurant.cuisine === 'string') {
+                        // Clean up concatenated string by adding spaces before capital letters
+                        cuisineText = restaurant.cuisine
+                          .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+                          .replace(/^\s+/, '') // Remove leading space
+                          .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+                          .trim();
+                      }
+                      
+                      // Limit length and add ellipsis if too long
+                      if (cuisineText.length > 40) {
+                        cuisineText = cuisineText.substring(0, 40) + '...';
+                      }
+                      
+                      return cuisineText ? (
+                        <CustomText variant="body" weight="normal" fontFamily="figtree" style={styles.cuisine}>
+                          {cuisineText}
+                        </CustomText>
+                      ) : null;
+                    })()}
                     {isLiked && (
                       <AntDesign name="heart" size={16} color="#FF6B6B" style={styles.likeIndicator} />
                     )}
                   </View>
                 </View>
                 
-                <TouchableOpacity 
-                  style={styles.closeButton}
-                  onPress={closeModal}
-                >
-                  <AntDesign name="close" size={20} color={COLORS.text.primary} />
-                </TouchableOpacity>
+                <View style={styles.headerButtons}>
+                  <TouchableOpacity 
+                    style={styles.shareButton}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      shareRestaurant(restaurant);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Share ${restaurant.businessName || restaurant.name}`}
+                    accessibilityHint="Opens the share menu to share this restaurant"
+                    activeOpacity={0.7}
+                  >
+                    <AntDesign name="sharealt" size={18} color="#FB7A20" />
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.closeButton}
+                    onPress={closeModal}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close restaurant details"
+                    accessibilityHint="Closes the restaurant modal"
+                    activeOpacity={0.7}
+                  >
+                    <AntDesign name="close" size={20} color={COLORS.text.primary} />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* Preview Mode - Quick Info */}
@@ -453,9 +571,9 @@ export default function RestaurantModal({ restaurant, visible, onClose, likedRes
                         Address
                       </CustomText>
                       <View style={styles.addressContainer}>
-                        <CustomText variant="body" weight="normal" fontFamily="figtree" style={styles.addressText}>
-                          {restaurant.location || "123 Main Street, Cumming, GA 30040"}
-                        </CustomText>
+                                              <CustomText variant="body" weight="normal" fontFamily="figtree" style={styles.addressText}>
+                        {restaurant.location && restaurant.location.trim() ? restaurant.location : "Address not provided"}
+                      </CustomText>
                         <TouchableOpacity style={styles.directionsButton} onPress={openDirections}>
                           <AntDesign name="right" size={16} color={COLORS.primary} />
                           <CustomText variant="caption" weight="medium" fontFamily="figtree" style={styles.directionsButtonText}>
@@ -624,6 +742,21 @@ const styles = StyleSheet.create({
   cuisine: {
     color: COLORS.text.secondary,
     fontSize: 14,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  shareButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(251, 122, 32, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 122, 32, 0.2)',
   },
   closeButton: {
     width: 32,

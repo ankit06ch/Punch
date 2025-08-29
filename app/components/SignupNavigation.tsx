@@ -158,8 +158,48 @@ export default function SignupNavigation({
       );
     }
 
+    // Hours step
+    if (current.key === 'hours') {
+      return (
+        <View style={signupStyles.buttonRow}>
+          <TouchableOpacity style={signupStyles.secondaryButton} onPress={onBack} disabled={loading}>
+            <CustomText variant="button" weight="bold" fontFamily="figtree" style={signupStyles.secondaryButtonText}>Back</CustomText>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[loginStyles.loginButton, { flex: 1, marginLeft: 6 }, (loading || !Object.values(form.hours).some((day: any) => day.isOpen)) && loginStyles.loginButtonDisabled]}
+            onPress={onNext}
+            disabled={loading || !Object.values(form.hours).some((day: any) => day.isOpen)}
+          >
+            <CustomText variant="button" weight="bold" fontFamily="figtree" style={loginStyles.loginButtonText}>
+              Next
+            </CustomText>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     // Logo step
     if (current.key === 'logo') {
+      return (
+        <View style={signupStyles.buttonRow}>
+          <TouchableOpacity style={signupStyles.secondaryButton} onPress={onBack} disabled={loading}>
+            <CustomText variant="button" weight="bold" fontFamily="figtree" style={signupStyles.secondaryButtonText}>Back</CustomText>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[loginStyles.loginButton, { flex: 1, marginLeft: 6 }]}
+            onPress={onNext}
+            disabled={loading}
+          >
+            <CustomText variant="button" weight="bold" fontFamily="figtree" style={loginStyles.loginButtonText}>
+              Next
+            </CustomText>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    // Business Pictures step
+    if (current.key === 'businessPictures') {
       return (
         <View style={signupStyles.buttonRow}>
           <TouchableOpacity style={signupStyles.secondaryButton} onPress={onBack} disabled={loading}>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TextInput, TouchableOpacity, ActivityIndicator, Switch, Animated, ScrollView } from 'react-native';
+import { View, TextInput, TouchableOpacity, ActivityIndicator, Switch, Animated, ScrollView, Image } from 'react-native';
 import { AntDesign, Feather } from '@expo/vector-icons';
 import CustomText from '../../components/CustomText';
 import loginStyles from '../styles/loginStyles';
@@ -42,6 +42,7 @@ interface SignupFormProps {
   pulsateAnim: Animated.Value;
   onProfilePicturePick: () => void;
   onLogoPick: () => void;
+  onBusinessPicturePick: () => void;
   onRemoveProfilePicture: () => void;
   onRemoveLogo: () => void;
   formatPhoneNumber: (value: string) => string;
@@ -78,6 +79,7 @@ export default function SignupForm({
   pulsateAnim,
   onProfilePicturePick,
   onLogoPick,
+  onBusinessPicturePick,
   onRemoveProfilePicture,
   onRemoveLogo,
   formatPhoneNumber
@@ -299,6 +301,16 @@ export default function SignupForm({
     borderWidth: 0,
   });
 
+  // Helper to determine price level from a numeric value
+  const getPriceLevel = (price: string) => {
+    const numericPrice = parseInt(price, 10);
+    if (numericPrice === 0) return '';
+    if (numericPrice < 10) return '$';
+    if (numericPrice < 20) return '$$';
+    if (numericPrice < 30) return '$$$';
+    return '$$$$';
+  };
+
   if (showLoadingScreen) {
     return (
       <View style={{ 
@@ -398,7 +410,9 @@ export default function SignupForm({
                 disabled={uploadingPicture}
               >
                 {profilePicture ? (
-                  <Animated.Image source={{ uri: profilePicture }} style={signupStyles.profilePicture} />
+                  <View style={signupStyles.profilePictureCircle}>
+                    <Image source={{ uri: profilePicture }} style={signupStyles.profilePicture} />
+                  </View>
                 ) : (
                   <View style={signupStyles.profilePicturePlaceholder}>
                     <View style={signupStyles.cameraIconContainer}>
@@ -501,22 +515,31 @@ export default function SignupForm({
         {current.key === 'pricing' && (
           <View style={loginStyles.inputContainer}>
             <AntDesign name="tag" size={20} color="#FB7A20" style={loginStyles.inputIcon} />
-            <TextInput
-              placeholder="Average price per person (e.g., $25)"
-              style={[loginStyles.input, { fontFamily: 'Figtree_400Regular' }]}
-              value={form.pricing}
-              onChangeText={text => {
-                setForm({ ...form, pricing: text });
-                setError('');
-              }}
-              keyboardType="numeric"
-              placeholderTextColor="#aaa"
-              editable={!loading}
-              maxLength={10}
-            />
+            <View style={signupStyles.pricingInputWrapper}>
+              <TextInput
+                placeholder="Average price per person (e.g., $25)"
+                style={[loginStyles.input, signupStyles.pricingInput]}
+                value={form.pricing}
+                onChangeText={text => {
+                  setForm({ ...form, pricing: text });
+                  setError('');
+                }}
+                keyboardType="numeric"
+                placeholderTextColor="#aaa"
+                editable={!loading}
+                maxLength={10}
+              />
+              {form.pricing && (
+                <View style={signupStyles.priceLevelBox}>
+                  <CustomText style={signupStyles.priceLevelText}>
+                    {getPriceLevel(form.pricing)}
+                  </CustomText>
+                </View>
+              )}
+            </View>
           </View>
         )}
-
+        
         {/* Address step */}
         {current.key === 'address' && (
           <View style={{ width: '100%' }}>
@@ -667,8 +690,11 @@ export default function SignupForm({
             <ScrollView 
               style={signupStyles.hoursScrollContainer}
               showsVerticalScrollIndicator={true}
-              nestedScrollEnabled={true}
-              contentContainerStyle={{ paddingBottom: 20 }}
+              nestedScrollEnabled={false}
+              scrollEventThrottle={16}
+              decelerationRate="fast"
+              alwaysBounceVertical={true}
+              contentContainerStyle={{ paddingBottom: 40 }}
             >
               {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => (
                 <View key={day} style={signupStyles.hoursDayContainer}>
@@ -779,7 +805,9 @@ export default function SignupForm({
               disabled={uploadingPicture}
             >
               {form.logo ? (
-                <Animated.Image source={{ uri: form.logo }} style={signupStyles.profilePicture} />
+                <View style={signupStyles.profilePictureCircle}>
+                  <Image source={{ uri: form.logo }} style={signupStyles.profilePicture} />
+                </View>
               ) : (
                 <View style={signupStyles.profilePicturePlaceholder}>
                   <AntDesign name="picture" size={32} color="#FB7A20" />
@@ -794,11 +822,58 @@ export default function SignupForm({
                 style={signupStyles.removePictureButton}
                 onPress={onRemoveLogo}
               >
-                <CustomText variant="body" weight="medium" fontFamily="figtree" style={signupStyles.removePictureText}>
-                  Remove
-                </CustomText>
+                <AntDesign name="closecircle" size={20} color="#ff4444" />
               </TouchableOpacity>
             )}
+          </View>
+        )}
+
+        {/* Business Pictures step */}
+        {current.key === 'businessPictures' && (
+          <View style={signupStyles.businessPicturesContainer}>
+            <CustomText fontFamily="figtree" style={signupStyles.businessPicturesTitle}>
+              Add photos of your business
+            </CustomText>
+            <CustomText fontFamily="figtree" style={signupStyles.businessPicturesSubtitle}>
+              Show customers what your business looks like
+            </CustomText>
+            
+            {/* Business Pictures Grid */}
+            <View style={signupStyles.businessPicturesGrid}>
+              {form.businessPictures && form.businessPictures.length > 0 ? (
+                form.businessPictures.map((picture: string, index: number) => (
+                  <View key={index} style={signupStyles.businessPictureItem}>
+                    <Image source={{ uri: picture }} style={signupStyles.businessPicture} />
+                    <TouchableOpacity 
+                      style={signupStyles.removeBusinessPictureButton}
+                      onPress={() => {
+                        const newPictures = form.businessPictures.filter((_: string, i: number) => i !== index);
+                        setForm({ ...form, businessPictures: newPictures });
+                      }}
+                    >
+                      <AntDesign name="closecircle" size={20} color="#ff4444" />
+                    </TouchableOpacity>
+                  </View>
+                ))
+              ) : null}
+              
+              {/* Add Picture Button */}
+              {(!form.businessPictures || form.businessPictures.length < 6) && (
+                <TouchableOpacity 
+                  style={signupStyles.addBusinessPictureButton}
+                  onPress={onBusinessPicturePick}
+                >
+                  <AntDesign name="plus" size={32} color="#FB7A20" />
+                  <CustomText fontFamily="figtree" style={signupStyles.addBusinessPictureText}>
+                    Add Photo
+                  </CustomText>
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            <CustomText fontFamily="figtree" style={signupStyles.businessPicturesNote}>
+              Add up to 6 photos (optional)
+            </CustomText>
           </View>
         )}
 
@@ -967,13 +1042,19 @@ export default function SignupForm({
             </View>
             
             {/* Terms and Privacy checkbox */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 24 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16, marginTop: 24 }}>
               <CustomCheckbox value={agree} onValueChange={setAgree} />
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                <CustomText fontFamily="figtree" style={{ color: '#222' }}>I agree to </CustomText>
-                <CustomText fontFamily="figtree" style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => {/* This will be handled by parent component */}}>Terms of Service</CustomText>
-                <CustomText fontFamily="figtree" style={{ color: '#222' }}>{' & '}</CustomText>
-                <CustomText fontFamily="figtree" style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => {/* This will be handled by parent component */}}>Privacy Policy</CustomText>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <CustomText fontFamily="figtree" style={{ color: '#222', lineHeight: 20 }}>
+                  I agree to{' '}
+                  <CustomText fontFamily="figtree" style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => {/* This will be handled by parent component */}}>
+                    Terms of Service
+                  </CustomText>
+                  {' & '}
+                  <CustomText fontFamily="figtree" style={{ color: '#FB7A20', textDecorationLine: 'underline' }} onPress={() => {/* This will be handled by parent component */}}>
+                    Privacy Policy
+                  </CustomText>
+                </CustomText>
               </View>
             </View>
           </>
