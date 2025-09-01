@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { View, StyleSheet, Dimensions, TouchableOpacity, Text, Animated, Image, PanResponder, ScrollView, Linking, Share } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { AntDesign } from '@expo/vector-icons';
-import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import CustomText from './CustomText';
 import * as Haptics from 'expo-haptics';
@@ -106,6 +106,23 @@ function getHoursForDay(hoursObj: any, canonicalDay: string): string | undefined
   return undefined;
 }
 
+// Track restaurant modal view
+const trackRestaurantModalView = async (restaurant: Restaurant) => {
+  if (!auth.currentUser) return;
+  
+  try {
+    const restaurantRef = doc(db, 'restaurants', restaurant.id);
+    await updateDoc(restaurantRef, {
+      totalViews: increment(1),
+      lastViewDate: new Date(),
+      modalViews: increment(1), // Track modal-specific views
+    });
+    console.log(`Tracked modal view for restaurant ${restaurant.id}`);
+  } catch (error) {
+    console.error('Error tracking restaurant modal view:', error);
+  }
+};
+
 // Share restaurant information
 const shareRestaurant = async (restaurant: Restaurant) => {
   try {
@@ -135,6 +152,20 @@ ${restaurant.distance ? `📏 ${restaurant.distance} away` : ''}
       message: shareMessage,
       title: restaurant.businessName || restaurant.name,
     });
+    
+    // Track share action
+    if (auth.currentUser) {
+      try {
+        const restaurantRef = doc(db, 'restaurants', restaurant.id);
+        await updateDoc(restaurantRef, {
+          totalShares: increment(1),
+          lastShareDate: new Date(),
+        });
+        console.log(`Tracked share for restaurant ${restaurant.id}`);
+      } catch (error) {
+        console.error('Error tracking restaurant share:', error);
+      }
+    }
   } catch (error) {
     console.error('Error sharing restaurant:', error);
   }
@@ -214,6 +245,8 @@ export default function RestaurantModal({ restaurant, visible, onClose, likedRes
   useEffect(() => {
     if (visible && restaurant) {
       openModal();
+      // Track modal view when it becomes visible
+      trackRestaurantModalView(restaurant);
     } else {
       closeModal();
     }

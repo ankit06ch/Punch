@@ -63,7 +63,6 @@ export default function SignupScreen() {
   const [isKeyboardDismissing, setIsKeyboardDismissing] = useState(false);
   const [showMoreCuisine, setShowMoreCuisine] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
-  const [emailExists, setEmailExists] = useState(false);
   const [phoneExists, setPhoneExists] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -215,102 +214,7 @@ export default function SignupScreen() {
     }, 3000);
   };
 
-  // Check if email already exists
-  const checkEmailExists = async (email: string) => {
-    if (!email || !/.+@.+\..+/.test(email)) return false;
-    
-    try {
-      console.log('=== EMAIL VALIDATION DEBUG ===');
-      console.log('Checking if email exists:', email);
-      console.log('Database reference:', db);
-      
-      // First, check directly against Firebase Auth for any sign-in methods
-      // If any methods are returned, the email is already registered.
-      try {
-        const methods = await fetchSignInMethodsForEmail(auth, email);
-        console.log('Auth sign-in methods for email:', methods);
-        if (methods && methods.length > 0) {
-          console.log('Email exists in Firebase Auth');
-          return true;
-        }
-      } catch (authCheckError) {
-        console.warn('fetchSignInMethodsForEmail failed, will fall back to Firestore check:', authCheckError);
-      }
-      
-      // First, let's test if we can query the database at all
-      console.log('Testing database connection...');
-      const testRef = collection(db, 'users');
-      const testQuery = query(testRef);
-      const testSnapshot = await getDocs(testQuery);
-      console.log('Database connection test - Total users in collection:', testSnapshot.size);
-      
-      // Let's also try to see what's in the first few documents
-      if (testSnapshot.size > 0) {
-        console.log('First few documents:');
-        testSnapshot.docs.slice(0, 3).forEach((doc, index) => {
-          const data = doc.data();
-          console.log(`Document ${index + 1}:`, doc.id);
-          console.log('  Data keys:', Object.keys(data));
-          console.log('  Full data:', JSON.stringify(data, null, 2));
-        });
-      } else {
-        console.log('No documents found in users collection');
-      }
-      
-      // Check Firestore users collection for specific email
-      const usersRef = collection(db, 'users');
-      console.log('Users collection reference:', usersRef);
-      
-      // Try different possible field names for email
-      console.log('Trying different email field names...');
-      
-      // Try 'email' field
-      let q = query(usersRef, where('email', '==', email));
-      let querySnapshot = await getDocs(q);
-      console.log('Query with "email" field - docs found:', querySnapshot.size);
-      
-      // Try 'emailAddress' field
-      q = query(usersRef, where('emailAddress', '==', email));
-      querySnapshot = await getDocs(q);
-      console.log('Query with "emailAddress" field - docs found:', querySnapshot.size);
-      
-      // Try 'userEmail' field
-      q = query(usersRef, where('userEmail', '==', email));
-      querySnapshot = await getDocs(q);
-      console.log('Query with "userEmail" field - docs found:', querySnapshot.size);
-      
-      // Try 'contact' field
-      q = query(usersRef, where('contact', '==', email));
-      querySnapshot = await getDocs(q);
-      console.log('Query with "contact" field - docs found:', querySnapshot.size);
-      
-      // Now try the original email field for the final result
-      q = query(usersRef, where('email', '==', email));
-      querySnapshot = await getDocs(q);
-      console.log('Final query with "email" field - docs found:', querySnapshot.size);
-      
-      // Log all documents to see what's in the collection
-      querySnapshot.forEach((doc) => {
-        console.log('Document found:', doc.id, doc.data());
-      });
-      
-      // Also check if there's already a user signed in with this email
-      // This handles the case where a user was created but not yet saved to Firestore
-      if (auth.currentUser && auth.currentUser.email === email) {
-        console.log('User already signed in with this email');
-        return true;
-      }
-      
-      const result = !querySnapshot.empty;
-      console.log('Final email exists result:', result);
-      console.log('=== END EMAIL VALIDATION DEBUG ===');
-      return result;
-    } catch (error) {
-      console.error('Error checking email:', error);
-      console.error('Error details:', error);
-      return false;
-    }
-  };
+
 
   // Check if phone already exists
   const checkPhoneExists = async (phone: string) => {
@@ -363,26 +267,7 @@ export default function SignupScreen() {
     }).start();
   }, []);
 
-  // Validate email when it changes
-  useEffect(() => {
-    if (mode === 'email' && form.email) {
-      const validateEmail = async () => {
-        console.log('Validating email:', form.email);
-        setIsValidating(true);
-        const exists = await checkEmailExists(form.email);
-        console.log('Email validation result:', exists);
-        setEmailExists(exists);
-        setIsValidating(false);
-      };
-      
-      const timeoutId = setTimeout(validateEmail, 300);
-      return () => clearTimeout(timeoutId);
-    } else if (mode === 'email' && !form.email) {
-      // Reset validation state when email is cleared
-      setEmailExists(false);
-      setIsValidating(false);
-    }
-  }, [form.email, mode]);
+
 
   // Validate phone when it changes
   useEffect(() => {
@@ -580,17 +465,6 @@ export default function SignupScreen() {
           setError('Please enter a valid email address.');
           return;
         }
-        
-        // Wait for email validation to complete
-        if (isValidating) {
-          setError('Please wait for email validation to complete.');
-          return;
-        }
-        
-        if (emailExists) {
-          setError('This email is already in use. Please choose a different one.');
-          return;
-        }
       } else if (mode === 'phone') {
         if (!form.phone || form.phone.length < 10) {
           setError('Please enter a valid phone number.');
@@ -696,17 +570,8 @@ export default function SignupScreen() {
         return;
       }
       
-      // Double-check email/phone existence right before signup to avoid race conditions
-      if (mode === 'email') {
-        console.log('Double-checking email before signup:', form.email);
-        const emailStillExists = await checkEmailExists(form.email);
-        console.log('Email still exists check result:', emailStillExists);
-        if (emailStillExists) {
-          setError('This email is already in use. Please choose a different one.');
-          setLoading(false);
-          return;
-        }
-      } else if (mode === 'phone') {
+      // Double-check phone existence right before signup to avoid race conditions
+      if (mode === 'phone') {
         console.log('Double-checking phone before signup:', form.phone);
         const phoneStillExists = await checkPhoneExists(form.phone);
         console.log('Phone still exists check result:', phoneStillExists);
@@ -897,11 +762,18 @@ export default function SignupScreen() {
           searchImpressions: 0, // How many times shown in search
           searchClicks: 0, // How many times clicked from search
           
+          // Screen-Specific Interaction Metrics
+          modalViews: 0, // RestaurantModal views
+          mapInteractions: 0, // Full-map interactions
+          walletInteractions: 0, // Wallet screen interactions
+          profileInteractions: 0, // Profile screen interactions
+          
           // Timestamps for Analytics
           firstViewDate: null,
           lastViewDate: null,
           firstLikeDate: null,
           lastLikeDate: null,
+          lastShareDate: null,
         };
         
         console.log('Saving restaurant data:', restaurantData);
@@ -1086,7 +958,6 @@ export default function SignupScreen() {
                   setNotifText={setNotifText}
                   mode={mode}
                   setMode={setMode}
-                  emailExists={emailExists}
                   phoneExists={phoneExists}
                   isValidating={isValidating}
                   showMoreCuisine={showMoreCuisine}

@@ -29,7 +29,6 @@ interface SignupFormProps {
   setNotifText: (notif: boolean) => void;
   mode: 'email' | 'phone';
   setMode: (mode: 'email' | 'phone') => void;
-  emailExists: boolean;
   phoneExists: boolean;
   isValidating: boolean;
   showMoreCuisine: boolean;
@@ -68,7 +67,6 @@ export default function SignupForm({
   setNotifText,
   mode,
   setMode,
-  emailExists,
   phoneExists,
   isValidating,
   showMoreCuisine,
@@ -891,8 +889,7 @@ export default function SignupForm({
                     placeholder="Email"
                     style={[
                       loginStyles.input, 
-                      { fontFamily: 'Figtree_400Regular' },
-                      emailExists && { borderColor: '#ff4444' }
+                      { fontFamily: 'Figtree_400Regular' }
                     ]}
                     value={form.email}
                     onChangeText={text => {
@@ -906,32 +903,6 @@ export default function SignupForm({
                     maxLength={30}
                   />
                 </View>
-                
-                {/* Email validation status */}
-                {form.email && (
-                  <View style={signupStyles.validationContainer}>
-                    {isValidating ? (
-                      <View style={signupStyles.validationStatus}>
-                        <ActivityIndicator size="small" color="#FB7A20" />
-                        <CustomText style={signupStyles.validationText}>Checking availability...</CustomText>
-                      </View>
-                    ) : emailExists ? (
-                      <View style={signupStyles.validationStatus}>
-                        <AntDesign name="closecircle" size={16} color="#ff4444" />
-                        <CustomText style={[signupStyles.validationText, signupStyles.validationError]}>
-                          This email is already in use
-                        </CustomText>
-                      </View>
-                    ) : form.email && /.+@.+\..+/.test(form.email) ? (
-                      <View style={signupStyles.validationStatus}>
-                        <AntDesign name="checkcircle" size={16} color="#4CAF50" />
-                        <CustomText style={[signupStyles.validationText, signupStyles.validationSuccess]}>
-                          Email is available
-                        </CustomText>
-                      </View>
-                    ) : null}
-                  </View>
-                )}
               </>
             )}
             

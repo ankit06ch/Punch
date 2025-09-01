@@ -263,19 +263,7 @@ export default function Home() {
       punches: userPunchCards[card.id] || 0, // Use real punch data from user profile
       total: (card as any).total || 10,
       logo: (card as any).logoUrl ? { uri: (card as any).logoUrl } : undefined,
-    }))
-    ; // Show all liked restaurants, even with 0 punches
-
-  // If no favorite cards, show some sample cards for demonstration
-  if (favoriteCards.length === 0 && restaurants.length > 0) {
-    favoriteCards = restaurants.slice(0, 4).map(card => ({
-      ...card,
-      businessName: (card as any).businessName || (card as any).name || 'Business',
-      punches: userPunchCards[card.id] || 0, // Use real punch data
-      total: (card as any).total || 10,
-      logo: (card as any).logoUrl ? { uri: (card as any).logoUrl } : undefined,
     }));
-  }
 
 
 
@@ -428,14 +416,14 @@ export default function Home() {
               <ActivityIndicator size="large" color={COLORS.primary} />
             </View>
           ) : (
-            <>
+            <View style={styles.greetingContainer}>
               <AnimatedGreeting name={name} />
               <AnimatedPunchCount punches={punches} />
-            </>
+            </View>
           )}
 
           {/* What's Near You Section */}
-          <GlassCard style={styles.sectionCard}>
+          <View style={styles.mapSectionContainer}>
             <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.sectionTitle}>
               What's Near You
             </CustomText>
@@ -448,10 +436,10 @@ export default function Home() {
               restaurants={restaurants} 
               onRestaurantPress={handleRestaurantPress}
             />
-          </GlassCard>
+          </View>
 
           {/* Available Rewards Section */}
-          <GlassCard style={styles.sectionCard}>
+          <View style={styles.rewardsSectionContainer}>
             <View style={styles.sectionHeader}>
               <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.sectionTitle}>
                 Available Rewards
@@ -480,6 +468,9 @@ export default function Home() {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.rewardsList}
+                snapToInterval={width * 0.75 + 20} // Snap to each card width (75% + margin)
+                snapToAlignment="start"
+                decelerationRate="fast"
                 renderItem={({ item }) => (
                   <EnhancedRewardCard
                     reward={item}
@@ -491,10 +482,10 @@ export default function Home() {
                 )}
               />
             )}
-          </GlassCard>
+          </View>
 
           {/* Punch Cards Section */}
-          <GlassCard style={styles.sectionCard}>
+          <View style={styles.sectionContainer}>
             <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.sectionTitle}>
               Your Favorite Punch Cards
             </CustomText>
@@ -523,7 +514,7 @@ export default function Home() {
                 />
               </View>
             )}
-          </GlassCard>
+          </View>
         </ScrollView>
       </SafeAreaView>
       
@@ -565,9 +556,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 40,
+  },
+  greetingContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 16,
   },
   loadingContainer: {
     flex: 1,
@@ -597,16 +591,34 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 12,
   },
-  sectionCard: {
+  sectionContainer: {
+    marginBottom: 24,
+    marginHorizontal: 20,
     borderRadius: 20,
     padding: 20,
-    marginBottom: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  mapSectionContainer: {
+    marginBottom: 24,
+    paddingHorizontal: 20, // Increased padding for better spacing
+  },
+  rewardsSectionContainer: {
+    marginBottom: 24,
+    paddingHorizontal: 0, // No horizontal padding to allow full width
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+    paddingHorizontal: 20,
   },
   headerButtons: {
     flexDirection: 'row',
@@ -663,6 +675,8 @@ const styles = StyleSheet.create({
   },
   rewardsList: {
     paddingVertical: 8,
+    paddingLeft: 20, // Padding for the first item
+    paddingRight: 20, // Padding for the last item
   },
   emptyRewardsState: {
     alignItems: 'center',

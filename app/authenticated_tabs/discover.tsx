@@ -155,6 +155,9 @@ export default function Discover() {
   // Like animation states
   const [likedRestaurantId, setLikedRestaurantId] = useState<string | null>(null);
   const [showLikeAnimation, setShowLikeAnimation] = useState(false);
+  const [activeTab, setActiveTab] = useState('explore');
+  const [isLightBackground, setIsLightBackground] = useState(false);
+  const searchScale = useRef(new Animated.Value(1)).current;
   const likeAnimationScale = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -165,24 +168,144 @@ export default function Discover() {
   }, []);
 
   // Recalculate distances when user location changes
+
+
+  // Filter restaurants based on active tab
   useEffect(() => {
-    if (userLocation && restaurants.length > 0) {
-      const restaurantsWithDistance = restaurants.map(restaurant => ({
-        ...restaurant,
-        distance: restaurant.latitude && restaurant.longitude 
-          ? calculateDistance(
-              userLocation.coords.latitude,
-              userLocation.coords.longitude,
-              restaurant.latitude,
-              restaurant.longitude
-            )
-          : '0.5 mi'
-      }));
-      setFilteredRestaurants(restaurantsWithDistance);
-    } else if (restaurants.length > 0) {
-      setFilteredRestaurants(restaurants);
+    if (restaurants.length === 0) return;
+    
+    let filtered = [...restaurants];
+    
+    if (activeTab === 'nearby' && userLocation) {
+      // Sort by distance for nearby tab
+      filtered = filtered
+        .filter(restaurant => restaurant.latitude && restaurant.longitude)
+        .map(restaurant => ({
+          ...restaurant,
+          distance: calculateDistance(
+            userLocation.coords.latitude,
+            userLocation.coords.longitude,
+            restaurant.latitude,
+            restaurant.longitude
+          )
+        }))
+        .sort((a, b) => {
+          const distA = parseFloat(a.distance.replace(/[^\d.]/g, ''));
+          const distB = parseFloat(b.distance.replace(/[^\d.]/g, ''));
+          return distA - distB;
+        });
+    } else if (activeTab === 'promotion') {
+      // Filter for restaurants with promotions
+      console.log('Filtering for restaurants with promotions...');
+      
+      // Debug: Log first few restaurants to see their structure
+      console.log('Sample restaurant data structure:', filtered.slice(0, 2).map(r => ({
+        name: r.name || r.businessName,
+        description: r.description,
+        tags: r.tags,
+        promotions: r.promotions,
+        specialOffers: r.specialOffers,
+        discounts: r.discounts,
+        weeklyDeals: r.weeklyDeals,
+        deals: r.deals,
+        offers: r.offers,
+        specials: r.specials,
+        promotionalOffers: r.promotionalOffers
+      })));
+      
+      // Filter restaurants that have promotion-related data
+      const restaurantsWithPromotions = filtered.filter(restaurant => {
+        // Check for explicit promotion fields
+        const hasPromotions = restaurant.promotions || 
+                             restaurant.specialOffers || 
+                             restaurant.discounts ||
+                             restaurant.weeklyDeals ||
+                             restaurant.deals ||
+                             restaurant.offers ||
+                             restaurant.specials ||
+                             restaurant.promotionalOffers;
+        
+        // Check if restaurant has any promotion-related content in description
+        const hasPromotionInDescription = restaurant.description && 
+          (restaurant.description.toLowerCase().includes('promotion') ||
+           restaurant.description.toLowerCase().includes('deal') ||
+           restaurant.description.toLowerCase().includes('offer') ||
+           restaurant.description.toLowerCase().includes('discount') ||
+           restaurant.description.toLowerCase().includes('special'));
+        
+        // Check if restaurant has promotion-related tags
+        const hasPromotionTags = restaurant.tags && 
+          restaurant.tags.some((tag: string) => 
+            tag.toLowerCase().includes('promotion') ||
+            tag.toLowerCase().includes('deal') ||
+            tag.toLowerCase().includes('offer') ||
+            tag.toLowerCase().includes('discount') ||
+            tag.toLowerCase().includes('special')
+          );
+        
+        const hasAnyPromotion = hasPromotions || hasPromotionInDescription || hasPromotionTags;
+        
+        console.log(`Restaurant ${restaurant.name || restaurant.businessName}: hasPromotion = ${hasAnyPromotion}`);
+        
+        return hasAnyPromotion;
+      });
+      
+      console.log(`Found ${restaurantsWithPromotions.length} restaurants with promotions out of ${filtered.length} total`);
+      
+      // If no restaurants have promotions, show a subset for testing
+      if (restaurantsWithPromotions.length === 0) {
+        console.log('No restaurants with promotions found, showing first 5 restaurants for testing');
+        filtered = filtered.slice(0, 5); // Show first 5 restaurants as a fallback
+      } else {
+        // Use only restaurants with promotions
+        filtered = restaurantsWithPromotions;
+      }
+      
+      // Add distance calculation and sort by proximity if user location available
+      if (userLocation) {
+        filtered = filtered.map(restaurant => ({
+          ...restaurant,
+          distance: restaurant.latitude && restaurant.longitude 
+            ? calculateDistance(
+                userLocation.coords.latitude,
+                userLocation.coords.longitude,
+                restaurant.latitude,
+                restaurant.longitude
+              )
+            : '0.5 mi'
+        })).sort((a, b) => {
+          const distA = parseFloat(a.distance.replace(/[^\d.]/g, ''));
+          const distB = parseFloat(b.distance.replace(/[^\d.]/g, ''));
+          return distA - distB;
+        });
+      }
+    } else {
+      // 'explore' tab or default: add distance if user location available
+      if (userLocation) {
+        filtered = filtered.map(restaurant => ({
+          ...restaurant,
+          distance: restaurant.latitude && restaurant.longitude 
+            ? calculateDistance(
+                userLocation.coords.latitude,
+                userLocation.coords.longitude,
+                restaurant.latitude,
+                restaurant.longitude
+              )
+            : '0.5 mi'
+        }));
+      }
     }
-  }, [userLocation, restaurants]);
+    
+    setFilteredRestaurants(filtered);
+  }, [activeTab, restaurants, userLocation]);
+
+  // Update header colors when current restaurant or image changes
+  useEffect(() => {
+    const currentRestaurant = filteredRestaurants[currentRestaurantIndex];
+    if (currentRestaurant?.images && currentRestaurant.images[currentImageIndex]) {
+      updateHeaderColors(currentRestaurant.images[currentImageIndex]);
+    }
+  }, [filteredRestaurants, currentRestaurantIndex, currentImageIndex]);
 
   // Debug restaurants state changes
   useEffect(() => {
@@ -234,6 +357,39 @@ export default function Discover() {
     
     console.log(`Price ${numPrice} converted to: ${result}`);
     return result;
+  };
+
+  // Simple background brightness detection for React Native
+  const updateHeaderColors = (imageUrl: string | undefined) => {
+    if (!imageUrl || typeof imageUrl !== 'string') {
+      // Default to dark mode if no valid image URL
+      setIsLightBackground(false);
+      return;
+    }
+    
+    // For React Native, we'll use a simple heuristic based on image URL
+    // This is a simplified approach since we can't analyze image pixels directly
+    const lightImageKeywords = ['white', 'light', 'bright', 'cream', 'beige', 'yellow', 'pink'];
+    const darkImageKeywords = ['black', 'dark', 'night', 'shadow', 'brown', 'navy', 'purple'];
+    
+    const url = imageUrl.toLowerCase();
+    let isLight = false;
+    
+    // Check for light background indicators
+    if (lightImageKeywords.some(keyword => url.includes(keyword))) {
+      isLight = true;
+    }
+    // Check for dark background indicators  
+    else if (darkImageKeywords.some(keyword => url.includes(keyword))) {
+      isLight = false;
+    }
+    // Default to dark mode for better contrast
+    else {
+      isLight = false;
+    }
+    
+    setIsLightBackground(isLight);
+    console.log(`Background detected as: ${isLight ? 'light' : 'dark'}`);
   };
 
   const requestLocationPermission = async () => {
@@ -708,6 +864,11 @@ export default function Discover() {
     if (currentRestaurantIndex < filteredRestaurants.length - 1) {
       setCurrentRestaurantIndex(currentRestaurantIndex + 1);
       setCurrentImageIndex(0);
+      // Update header colors for new restaurant
+      const nextRestaurant = filteredRestaurants[currentRestaurantIndex + 1];
+      if (nextRestaurant?.images && nextRestaurant.images[0]) {
+        updateHeaderColors(nextRestaurant.images[0]);
+      }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
   };
@@ -716,6 +877,11 @@ export default function Discover() {
     if (currentRestaurantIndex > 0) {
       setCurrentRestaurantIndex(currentRestaurantIndex - 1);
       setCurrentImageIndex(0);
+      // Update header colors for new restaurant
+      const prevRestaurant = filteredRestaurants[currentRestaurantIndex - 1];
+      if (prevRestaurant?.images && prevRestaurant.images[0]) {
+        updateHeaderColors(prevRestaurant.images[0]);
+      }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
   };
@@ -750,13 +916,81 @@ export default function Discover() {
       <StatusBar style="dark" backgroundColor="#fff" translucent={true} />
       
              {/* Header */}
-       <View style={styles.header}>
-         <BlurView intensity={20} tint="light" style={styles.glassHeader}>
-           <Text style={styles.headerTitle}>Explore</Text>
-           <TouchableOpacity onPress={openSearch}>
-             <Feather name="search" size={28} color="#2C3E50" />
+       <View style={styles.simpleHeader}>
+         <View style={styles.tabContainer}>
+           <TouchableOpacity 
+             style={[
+               styles.tab, 
+               activeTab === 'explore' && styles.activeTab,
+               activeTab === 'explore' && {
+                 backgroundColor: isLightBackground ? 'rgba(44, 62, 80, 0.1)' : 'rgba(255, 255, 255, 0.2)'
+               }
+             ]}
+             onPress={() => setActiveTab('explore')}
+           >
+             <Text style={[
+               styles.tabText, 
+               activeTab === 'explore' && styles.activeTabText,
+               { color: activeTab === 'explore' ? (isLightBackground ? "#2C3E50" : "#FFFFFF") : (isLightBackground ? "#2C3E50" : "rgba(255, 255, 255, 0.7)") }
+             ]}>Explore</Text>
            </TouchableOpacity>
-         </BlurView>
+           <TouchableOpacity 
+             style={[
+               styles.tab, 
+               activeTab === 'nearby' && styles.activeTab,
+               activeTab === 'nearby' && {
+                 backgroundColor: isLightBackground ? 'rgba(44, 62, 80, 0.1)' : 'rgba(255, 255, 255, 0.2)'
+               }
+             ]}
+             onPress={() => setActiveTab('nearby')}
+           >
+             <Text style={[
+               styles.tabText, 
+               activeTab === 'nearby' && styles.activeTabText,
+               { color: activeTab === 'nearby' ? (isLightBackground ? "#2C3E50" : "#FFFFFF") : (isLightBackground ? "#2C3E50" : "rgba(255, 255, 255, 0.7)") }
+             ]}>Nearby</Text>
+           </TouchableOpacity>
+           <TouchableOpacity 
+             style={[
+               styles.tab, 
+               activeTab === 'promotion' && styles.activeTab,
+               activeTab === 'promotion' && {
+                 backgroundColor: isLightBackground ? 'rgba(44, 62, 80, 0.1)' : 'rgba(255, 255, 255, 0.2)'
+               }
+             ]}
+             onPress={() => setActiveTab('promotion')}
+           >
+             <Text style={[
+               styles.tabText, 
+               activeTab === 'promotion' && styles.activeTabText,
+               { color: activeTab === 'promotion' ? (isLightBackground ? "#2C3E50" : "#FFFFFF") : (isLightBackground ? "#2C3E50" : "rgba(255, 255, 255, 0.7)") }
+             ]}>Promotion</Text>
+           </TouchableOpacity>
+         </View>
+         <TouchableOpacity 
+           onPress={() => {
+             // Trigger scale animation
+             Animated.timing(searchScale, {
+               toValue: 0.93,
+               duration: 150,
+               useNativeDriver: true,
+             }).start(() => {
+               // Scale back to normal
+               Animated.timing(searchScale, {
+                 toValue: 1,
+                 duration: 150,
+                 useNativeDriver: true,
+               }).start();
+             });
+             openSearch();
+           }}
+           style={styles.searchButton}
+           activeOpacity={0.7}
+         >
+           <Animated.View style={{ transform: [{ scale: searchScale }] }}>
+             <Feather name="search" size={24} color={isLightBackground ? "#2C3E50" : "#FFFFFF"} />
+           </Animated.View>
+         </TouchableOpacity>
        </View>
 
       
@@ -811,6 +1045,10 @@ export default function Discover() {
                    const newIndex = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
                    if (newIndex !== currentImageIndex) {
                      setCurrentImageIndex(newIndex);
+                     // Update header colors based on new image
+                     if (restaurant.images && restaurant.images[newIndex]) {
+                       updateHeaderColors(restaurant.images[newIndex]);
+                     }
                    }
                  }}
                  onScrollBeginDrag={() => {
@@ -1040,30 +1278,51 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-               header: {
+
+     simpleHeader: {
        position: 'absolute',
-       top: 0,
-       left: 0,
-       right: 0,
+       top: 40,
+       left: 20,
+       right: 20,
        zIndex: 100,
-     },
-     glassHeader: {
        flexDirection: 'row',
        alignItems: 'center',
-       justifyContent: 'space-between',
-       paddingHorizontal: 20,
-       paddingTop: 60,
+       justifyContent: 'center',
+       paddingHorizontal: 24,
+       paddingTop: 16,
        paddingBottom: 16,
-       borderRadius: 0,
-       borderBottomWidth: 1,
-       borderBottomColor: 'rgba(255, 255, 255, 0.2)',
-       backgroundColor: 'rgba(255, 255, 255, 0.9)',
      },
-   headerTitle: {
-     fontSize: 32,
-     fontWeight: 'bold',
-     color: '#2C3E50',
-     marginTop: 0,
+     tabContainer: {
+       flexDirection: 'row',
+       alignItems: 'center',
+       gap: 24,
+       marginRight: 60, // Space for search button
+     },
+     tab: {
+       paddingVertical: 8,
+       paddingHorizontal: 16,
+       borderRadius: 20,
+     },
+     activeTab: {
+       // Background will be applied dynamically
+     },
+     tabText: {
+       fontSize: 16,
+       fontWeight: '500',
+       color: 'rgba(255, 255, 255, 0.7)',
+       fontFamily: 'Figtree_500Medium',
+     },
+     activeTabText: {
+       color: '#FFFFFF',
+       fontWeight: '600',
+     },
+   searchButton: {
+     position: 'absolute',
+     right: 0,
+     width: 44,
+     height: 44,
+     alignItems: 'center',
+     justifyContent: 'center',
    },
   debugPanel: {
     padding: 20,

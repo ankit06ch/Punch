@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, FlatList, Dimensions, TouchableOpacity, StyleSheet, TextInput, ScrollView, Modal, Animated, PanResponder, Image } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { collection, getDocs, doc, getDoc, updateDoc, arrayRemove, arrayUnion, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, updateDoc, arrayRemove, arrayUnion, onSnapshot, increment } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomText from '../../components/CustomText';
@@ -10,6 +10,7 @@ import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
 import styles, { CARD_WIDTH, CARD_HEIGHT } from '../styles/walletStyles';
 import RestaurantModal from '../../components/RestaurantModal';
 import * as Haptics from 'expo-haptics';
+import * as Location from 'expo-location';
 import {
   useFonts,
   Figtree_300Light,
@@ -45,6 +46,36 @@ const COLORS = {
 const { width } = Dimensions.get('window');
 const CARD_SPACING = 20;
 const VISIBLE_CARD_WIDTH = CARD_WIDTH * 0.9; // Slightly smaller when not focused
+
+// Calculate distance between two points using Haversine formula
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const R = 3959; // Earth's radius in miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+};
+
+// Track restaurant wallet interaction
+const trackRestaurantWalletInteraction = async (restaurantId: string) => {
+  if (!auth.currentUser) return;
+  
+  try {
+    const restaurantRef = doc(db, 'restaurants', restaurantId);
+    await updateDoc(restaurantRef, {
+      totalViews: increment(1),
+      lastViewDate: new Date(),
+      walletInteractions: increment(1), // Track wallet-specific interactions
+    });
+    console.log(`Tracked wallet interaction for restaurant ${restaurantId}`);
+  } catch (error) {
+    console.error('Error tracking restaurant wallet interaction:', error);
+  }
+};
 
 // Sophisticated card colors
 const CARD_COLORS = [
@@ -193,7 +224,7 @@ function CreditCardPunchCard({
               numberOfLines={1}
               ellipsizeMode="tail"
             >
-              {card.location || '123 Main St, City'}
+              {card.distance ? `${card.distance} away` : (card.location || '123 Main St, City')}
             </CustomText>
           </View>
           
@@ -366,7 +397,7 @@ function TransactionItem({ tx }: { tx: any }) {
   }
   
   return (
-    <GlassCard style={styles.transactionCard}>
+    <View style={styles.transactionCard}>
       <View style={styles.transactionContent}>
         <View style={[styles.transactionIcon, { backgroundColor: iconColor + '20' }]}>
           <Ionicons name={iconName as any} size={20} color={iconColor} />
@@ -394,7 +425,7 @@ function TransactionItem({ tx }: { tx: any }) {
           {tx.amount}
         </CustomText>
       </View>
-    </GlassCard>
+    </View>
   );
 }
 
@@ -470,7 +501,29 @@ export default function Wallet() {
   const [shakingCards, setShakingCards] = useState<Set<string>>(new Set());
   const [liked, setLiked] = useState<string[]>([]);
   const [userPunchCards, setUserPunchCards] = useState<{[key: string]: number}>({});
+  const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
+  const [lastUsedDates, setLastUsedDates] = useState<{[key: string]: Date}>({});
   const flatListRef = useRef<FlatList<any>>(null);
+
+  // Get user location
+  useEffect(() => {
+    const getUserLocation = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('Location permission denied');
+          return;
+        }
+
+        const location = await Location.getCurrentPositionAsync({});
+        setUserLocation(location);
+      } catch (error) {
+        console.error('Error getting location:', error);
+      }
+    };
+
+    getUserLocation();
+  }, []);
 
   useEffect(() => {
     const fetchRestaurants = async () => {
@@ -536,14 +589,40 @@ export default function Wallet() {
     
     switch (activeFilter) {
       case 'nearby':
-        return restaurant.distance < 5; // Assuming distance in miles
+        if (!userLocation || !restaurant.latitude || !restaurant.longitude) return false;
+        const distance = calculateDistance(
+          userLocation.coords.latitude,
+          userLocation.coords.longitude,
+          restaurant.latitude,
+          restaurant.longitude
+        );
+        return distance <= 5; // Within 5 miles
       case 'recent':
-        return restaurant.lastUsed?.includes('today') || restaurant.lastUsed?.includes('yesterday');
+        // Check if user has used this restaurant recently (has punches)
+        return (userPunchCards[restaurant.id] || 0) > 0;
       case 'close':
-        return (restaurant.total - restaurant.punches) <= 2;
+        // Check if user is close to earning a reward (needs 2 or fewer punches)
+        const punches = userPunchCards[restaurant.id] || 0;
+        const totalPunches = restaurant.totalPunches || 10; // Default to 10 if not specified
+        return punches > 0 && (totalPunches - punches) <= 2;
       default:
         return true;
     }
+  }).map(restaurant => {
+    // Add distance information for display
+    if (userLocation && restaurant.latitude && restaurant.longitude) {
+      const distance = calculateDistance(
+        userLocation.coords.latitude,
+        userLocation.coords.longitude,
+        restaurant.latitude,
+        restaurant.longitude
+      );
+      return {
+        ...restaurant,
+        distance: `${distance.toFixed(1)} mi`
+      };
+    }
+    return restaurant;
   });
 
 
@@ -568,6 +647,12 @@ export default function Wallet() {
         console.log('Remove card:', selectedCard?.name);
         break;
     }
+  };
+
+  const handleFilterChange = (filter: string) => {
+    setActiveFilter(filter);
+    // Provide haptic feedback when filter changes
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
 
@@ -623,6 +708,8 @@ export default function Wallet() {
       setShakingCards(new Set());
       return;
     }
+    // Track wallet interaction
+    trackRestaurantWalletInteraction(card.id);
     // Single tap - show restaurant modal
     setSelectedRestaurant(card);
     setRestaurantModalVisible(true);
@@ -814,7 +901,7 @@ export default function Wallet() {
             </View>
 
             {/* Filter Chips */}
-            <FilterChips activeFilter={activeFilter} setActiveFilter={setActiveFilter} />
+            <FilterChips activeFilter={activeFilter} setActiveFilter={handleFilterChange} />
             
             {loading ? (
               <View style={styles.loadingContainer}>
@@ -865,7 +952,7 @@ export default function Wallet() {
           </View>
 
           {/* Transaction History Section */}
-          <GlassCard style={styles.sectionCard}>
+          <View style={styles.recentActivityCard}>
             <View style={styles.sectionHeader}>
               <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.sectionTitle}>
                 Recent Activity
@@ -883,7 +970,7 @@ export default function Wallet() {
                 <TransactionItem key={tx.id} tx={tx} />
               ))}
             </View>
-          </GlassCard>
+          </View>
         </ScrollView>
       </SafeAreaView>
 

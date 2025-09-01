@@ -8,7 +8,7 @@ import MapView, { Marker, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
 import CustomText from '../../components/CustomText';
 import RestaurantModal from '../../components/RestaurantModal';
@@ -82,6 +82,23 @@ export default function FullMapScreen() {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     const distance = R * c;
     return distance < 1 ? `${(distance * 5280).toFixed(0)} ft` : `${distance.toFixed(1)} mi`;
+  };
+
+  // Track restaurant map interaction
+  const trackRestaurantMapInteraction = async (restaurantId: string) => {
+    if (!auth.currentUser) return;
+    
+    try {
+      const restaurantRef = doc(db, 'restaurants', restaurantId);
+      await updateDoc(restaurantRef, {
+        totalViews: increment(1),
+        lastViewDate: new Date(),
+        mapInteractions: increment(1), // Track map-specific interactions
+      });
+      console.log(`Tracked map interaction for restaurant ${restaurantId}`);
+    } catch (error) {
+      console.error('Error tracking restaurant map interaction:', error);
+    }
   };
 
   useEffect(() => {
@@ -260,6 +277,8 @@ export default function FullMapScreen() {
 
   const handleRestaurantPress = (restaurant: Restaurant) => {
     console.log('Restaurant pressed:', restaurant.name);
+    // Track map interaction
+    trackRestaurantMapInteraction(restaurant.id);
     setSelectedRestaurant(restaurant);
     setModalVisible(true);
   };

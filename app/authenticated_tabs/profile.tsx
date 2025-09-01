@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, ScrollView, FlatList, Share, Animated, TextInput, Dimensions, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, RefreshControl, Keyboard, ImageBackground } from 'react-native';
 import { Ionicons, Feather, AntDesign } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, query, where, orderBy, onSnapshot, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, query, where, orderBy, onSnapshot, deleteDoc, writeBatch, serverTimestamp, increment } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import profileStyles from '../styles/profileStyles';
@@ -22,6 +22,23 @@ import {
 } from '@expo-google-fonts/figtree';
 
 const ORANGE = '#fb7a20';
+
+// Track restaurant profile interaction
+const trackRestaurantProfileInteraction = async (restaurantId: string) => {
+  if (!auth.currentUser) return;
+  
+  try {
+    const restaurantRef = doc(db, 'restaurants', restaurantId);
+    await updateDoc(restaurantRef, {
+      totalViews: increment(1),
+      lastViewDate: new Date(),
+      profileInteractions: increment(1), // Track profile-specific interactions
+    });
+    console.log(`Tracked profile interaction for restaurant ${restaurantId}`);
+  } catch (error) {
+    console.error('Error tracking restaurant profile interaction:', error);
+  }
+};
 
 export default function Profile() {
   // Load Figtree fonts
@@ -515,6 +532,8 @@ export default function Profile() {
   };
 
   const handleRestaurantPress = (restaurant: any) => {
+    // Track profile interaction
+    trackRestaurantProfileInteraction(restaurant.id);
     setSelectedRestaurant(restaurant);
     setRestaurantModalVisible(true);
   };

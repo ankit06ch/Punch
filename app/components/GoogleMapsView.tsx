@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 
 const { width, height } = Dimensions.get('window');
-const MAP_HEIGHT = 280; // Increased from 200 to 280
+const MAP_HEIGHT = 380; // Increased from 280 to 380 for bigger map
 
 interface Restaurant {
   id: string;
@@ -255,9 +255,10 @@ const styles = StyleSheet.create({
   },
   mapContainer: {
     height: MAP_HEIGHT,
-    borderRadius: 16,
+    borderRadius: 12,
     overflow: 'hidden',
     position: 'relative',
+    marginHorizontal: -4, // Negative margin to extend beyond container padding
   },
   map: {
     width: '100%',

@@ -99,9 +99,9 @@ export default function GiftBoxReward({ visible, reward, onClose, onClaim }: Gif
       rewardOpacity.setValue(0);
       // Reset pan animation to ensure consistent size
       panAnimation.setValue(0);
-      // Set modal to be visible immediately
-      modalAnimation.setValue(1);
-      backdropAnimation.setValue(1);
+      // Reset backdrop animation
+      backdropAnimation.setValue(0);
+      // Trigger fly-up animation
       openModal();
     } else {
       closeModal();
@@ -109,13 +109,24 @@ export default function GiftBoxReward({ visible, reward, onClose, onClaim }: Gif
   }, [visible]);
 
   const openModal = () => {
-    // Modal is already set to visible in useEffect
-    // Just ensure backdrop is visible
-    Animated.timing(backdropAnimation, {
-      toValue: 1,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
+    // Start modal from below screen
+    modalAnimation.setValue(SCREEN_HEIGHT);
+    
+    // Animate modal flying up from bottom
+    Animated.parallel([
+      Animated.spring(modalAnimation, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 100,
+        friction: 8,
+        duration: 500,
+      }),
+      Animated.timing(backdropAnimation, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
   const closeModal = () => {
@@ -325,7 +336,7 @@ export default function GiftBoxReward({ visible, reward, onClose, onClaim }: Gif
             {
               transform: [
                 {
-                  translateY: panAnimation
+                  translateY: Animated.add(modalAnimation, panAnimation)
                 }
               ]
             }
