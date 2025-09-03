@@ -176,11 +176,8 @@ const profileStyles = StyleSheet.create({
     left: 0,
     right: 0,
     top: '50%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   messagesContent: {
     paddingHorizontal: 16,
@@ -654,6 +651,20 @@ const profileStyles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     fontFamily: 'Figtree_400Regular',
+  },
+  // Loading state styles
+  loadingState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  loadingText: {
+    color: '#7F8C8D',
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 16,
+    fontFamily: 'Figtree_500Medium',
   },
 });
 

@@ -2,6 +2,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../firebase/config';
+import { sanitizeImageUri } from './urlUtils';
 
 export interface ProfilePictureResult {
   uri: string;
@@ -167,9 +168,16 @@ export const uploadProfilePicture = async (
       return null;
     }
 
+    // Sanitize the image URI to ensure it's secure
+    const secureUri = sanitizeImageUri(imageUri);
+    if (!secureUri) {
+      console.error('Invalid or insecure image URI:', imageUri);
+      return null;
+    }
+    
     // Convert image URI to blob
     console.log('Fetching image...');
-    const response = await fetch(imageUri);
+    const response = await fetch(secureUri);
     
     if (!response.ok) {
       console.error('Failed to fetch image:', response.status, response.statusText);

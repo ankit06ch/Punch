@@ -1,17 +1,31 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, Image, TouchableOpacity, Animated, StyleSheet, ScrollView, TextInput, Dimensions, RefreshControl } from 'react-native';
+import { View, Text, Image, TouchableOpacity, Animated, StyleSheet, ScrollView, TextInput, Dimensions, RefreshControl, Modal, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { AntDesign, Feather, Ionicons } from '@expo/vector-icons';
-import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, increment, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, increment, writeBatch, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import RestaurantModal from '../../components/RestaurantModal';
+import EditableRestaurantModal from '../../components/EditableRestaurantModal';
+import GoogleMapsView from '../components/GoogleMapsView';
+import AnimatedBubblesBackground from '../components/AnimatedBubblesBackground';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import * as ImagePicker from 'expo-image-picker';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+const COLORS = {
+  primary: '#2C3E50',
+  secondary: '#34495E',
+  text: {
+    primary: '#2C3E50',
+    secondary: '#7F8C8D',
+    light: '#BDC3C7',
+  },
+};
 
 // Restaurant Metrics Tracking Functions
 const trackRestaurantView = async (restaurantId: string, userId: string) => {
@@ -57,7 +71,7 @@ const trackRestaurantLike = async (restaurantId: string, userId: string, isLikin
       // User is unliking the restaurant
       if (currentLikedByUsers.includes(userId)) {
         await updateDoc(restaurantRef, {
-          totalLikes: increment(1),
+          totalLikes: increment(-1),
           likedByUsers: arrayRemove(userId),
           lastLikeDate: new Date(),
           weeklyLikes: increment(-1),
@@ -135,6 +149,7 @@ export default function Discover() {
   const [currentRestaurantIndex, setCurrentRestaurantIndex] = useState(0);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchActive, setSearchActive] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -142,11 +157,18 @@ export default function Discover() {
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [editableModalVisible, setEditableModalVisible] = useState(false);
   const [activeCategory, setActiveCategory] = useState('All');
   const [categories, setCategories] = useState<string[]>([]);
   const [promotions, setPromotions] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [isImageScrolling, setIsImageScrolling] = useState(false);
+  const [isBusiness, setIsBusiness] = useState(false);
+  const [userData, setUserData] = useState<any>(null);
+  const [notificationsVisible, setNotificationsVisible] = useState(false);
+  const [businessStats, setBusinessStats] = useState<any>(null);
+  const [deletablePictureIndex, setDeletablePictureIndex] = useState<number | null>(null);
+  const [isShaking, setIsShaking] = useState(false);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -159,24 +181,203 @@ export default function Discover() {
   const [isLightBackground, setIsLightBackground] = useState(false);
   const searchScale = useRef(new Animated.Value(1)).current;
   const likeAnimationScale = useRef(new Animated.Value(0)).current;
+  const shakeAnimation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    fetchRestaurants();
+    fetchUserData();
     fetchPromotions();
     fetchLiked();
     requestLocationPermission();
   }, []);
 
+  // Fetch business statistics for business accounts
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user || !isBusiness) return;
+
+    const unsubscribe = onSnapshot(doc(db, 'restaurants', user.uid), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        setBusinessStats(data);
+      }
+    }, (error) => {
+      console.error('Error listening to business stats:', error);
+    });
+
+    return () => unsubscribe();
+  }, [isBusiness]);
+
+  // Fetch restaurants after user data and business status are determined
+  useEffect(() => {
+    if (userData) {
+      console.log('User data loaded, fetching restaurants. isBusiness:', isBusiness);
+      fetchRestaurants();
+    }
+  }, [userData, isBusiness]);
+
+  // Business picture management functions
+
+  const handleAddBusinessPicture = async (restaurant: any) => {
+    try {
+      // Check if we already have 6 pictures
+      if (restaurant.images && restaurant.images.length >= 6) {
+        Alert.alert('Maximum Pictures Reached', 'You can only add up to 6 pictures.');
+        return;
+      }
+
+      // Request permissions
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant permission to access your photo library.');
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const imageUri = result.assets[0].uri;
+        
+        // TODO: Upload image to Firebase Storage and get URL
+        // For now, we'll use the local URI as a placeholder
+        const newImageUrl = imageUri;
+        
+        // Update the restaurant's images array
+        const updatedImages = [...(restaurant.images || []), newImageUrl];
+        
+        // Update Firestore
+        const user = auth.currentUser;
+        if (user) {
+          await updateDoc(doc(db, 'restaurants', user.uid), {
+            images: updatedImages
+          });
+          
+          // Update local state
+          setRestaurants(prev => 
+            prev.map(r => r.id === restaurant.id ? { ...r, images: updatedImages } : r)
+          );
+          
+          Alert.alert('Success', 'Picture added successfully!');
+        }
+      }
+    } catch (error) {
+      console.error('Error adding business picture:', error);
+      Alert.alert('Error', 'Failed to add picture. Please try again.');
+    }
+  };
+
+  const handleDeleteBusinessPicture = async (restaurant: any, imageIndex: number) => {
+    try {
+      Alert.alert(
+        'Delete Picture',
+        'Are you sure you want to delete this picture?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              const updatedImages = restaurant.images.filter((_: any, index: number) => index !== imageIndex);
+              
+              // Update Firestore
+              const user = auth.currentUser;
+              if (user) {
+                await updateDoc(doc(db, 'restaurants', user.uid), {
+                  images: updatedImages
+                });
+                
+                // Update local state
+                setRestaurants(prev => 
+                  prev.map(r => r.id === restaurant.id ? { ...r, images: updatedImages } : r)
+                );
+                
+                Alert.alert('Success', 'Picture deleted successfully!');
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error deleting business picture:', error);
+      Alert.alert('Error', 'Failed to delete picture. Please try again.');
+    }
+  };
+
+  // Long press handler for business pictures
+  const handleLongPressPicture = (imageIndex: number) => {
+    setDeletablePictureIndex(imageIndex);
+    setIsShaking(true);
+    
+    // Start shake animation
+    shakeAnimation.setValue(0);
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shakeAnimation, {
+          toValue: 1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shakeAnimation, {
+          toValue: -1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
+
+  // Cancel deletion mode
+  const cancelDeletion = () => {
+    setDeletablePictureIndex(null);
+    setIsShaking(false);
+    shakeAnimation.stopAnimation();
+  };
+
+  // Handle picture tap (for deletion when in deletion mode)
+  const handlePictureTap = (restaurant: any, imageIndex: number) => {
+    if (deletablePictureIndex === imageIndex && isShaking) {
+      // Delete the picture
+      handleDeleteBusinessPicture(restaurant, imageIndex);
+      cancelDeletion();
+    }
+  };
+
+  // Fetch user data to check if business account
+  const fetchUserData = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        setUserData(data);
+        setIsBusiness(data.isBusiness || false);
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    } finally {
+      setInitialLoading(false);
+    }
+  };
+
   // Recalculate distances when user location changes
 
 
-  // Filter restaurants based on active tab
+  // Filter restaurants based on active tab and user type
   useEffect(() => {
     if (restaurants.length === 0) return;
     
     let filtered = [...restaurants];
     
-    if (activeTab === 'nearby' && userLocation) {
+    // For business accounts, the fetchRestaurants function already filters to only their restaurant
+    // For regular users, apply tab-based filtering
+    if (!isBusiness && activeTab === 'nearby' && userLocation) {
       // Sort by distance for nearby tab
       filtered = filtered
         .filter(restaurant => restaurant.latitude && restaurant.longitude)
@@ -194,7 +395,7 @@ export default function Discover() {
           const distB = parseFloat(b.distance.replace(/[^\d.]/g, ''));
           return distA - distB;
         });
-    } else if (activeTab === 'promotion') {
+    } else if (!isBusiness && activeTab === 'promotion') {
       // Filter for restaurants with promotions
       console.log('Filtering for restaurants with promotions...');
       
@@ -279,8 +480,8 @@ export default function Discover() {
           return distA - distB;
         });
       }
-    } else {
-      // 'explore' tab or default: add distance if user location available
+    } else if (!isBusiness) {
+      // 'explore' tab or default: add distance if user location available (only for regular users)
       if (userLocation) {
         filtered = filtered.map(restaurant => ({
           ...restaurant,
@@ -297,7 +498,14 @@ export default function Discover() {
     }
     
     setFilteredRestaurants(filtered);
-  }, [activeTab, restaurants, userLocation]);
+  }, [activeTab, restaurants, userLocation, isBusiness, userData]);
+
+  // Refetch restaurants when business status changes
+  useEffect(() => {
+    if (userData) {
+      fetchRestaurants();
+    }
+  }, [isBusiness, userData]);
 
   // Update header colors when current restaurant or image changes
   useEffect(() => {
@@ -416,8 +624,29 @@ export default function Discover() {
 
   async function fetchRestaurants() {
     try {
-      const querySnapshot = await getDocs(collection(db, 'restaurants'));
-      const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      let data: any[] = [];
+      
+      console.log('fetchRestaurants called. isBusiness:', isBusiness);
+      
+      if (isBusiness) {
+        // For business accounts, only fetch their own restaurant
+        const user = auth.currentUser;
+        console.log('Business account detected. User UID:', user?.uid);
+        if (user) {
+          const restaurantDoc = await getDoc(doc(db, 'restaurants', user.uid));
+          if (restaurantDoc.exists()) {
+            data = [{ id: restaurantDoc.id, ...restaurantDoc.data() }];
+            console.log('Found business restaurant:', data[0].name);
+          } else {
+            console.log('No restaurant document found for business user');
+          }
+        }
+      } else {
+        // For regular users, fetch all restaurants
+        const querySnapshot = await getDocs(collection(db, 'restaurants'));
+        data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+        console.log('Fetched all restaurants for regular user:', data.length);
+      }
       
       console.log('Fetched restaurants:', data.length);
       console.log('Restaurant names:', data.map(r => r.name));
@@ -590,6 +819,7 @@ export default function Discover() {
       
       setRestaurants(restaurantsWithImages);
       setLoading(false);
+      setInitialLoading(false);
       
       // Track views for displayed restaurants
       if (auth.currentUser) {
@@ -913,111 +1143,166 @@ export default function Discover() {
 
   return (
     <View style={styles.container}>
+      <AnimatedBubblesBackground />
       <StatusBar style="dark" backgroundColor="#fff" translucent={true} />
       
-             {/* Header */}
-       <View style={styles.simpleHeader}>
-         <View style={styles.tabContainer}>
-           <TouchableOpacity 
-             style={[
-               styles.tab, 
-               activeTab === 'explore' && styles.activeTab,
-               activeTab === 'explore' && {
-                 backgroundColor: isLightBackground ? 'rgba(44, 62, 80, 0.1)' : 'rgba(255, 255, 255, 0.2)'
-               }
-             ]}
-             onPress={() => setActiveTab('explore')}
-           >
-             <Text style={[
-               styles.tabText, 
-               activeTab === 'explore' && styles.activeTabText,
-               { color: activeTab === 'explore' ? (isLightBackground ? "#2C3E50" : "#FFFFFF") : (isLightBackground ? "#2C3E50" : "rgba(255, 255, 255, 0.7)") }
-             ]}>Explore</Text>
-           </TouchableOpacity>
-           <TouchableOpacity 
-             style={[
-               styles.tab, 
-               activeTab === 'nearby' && styles.activeTab,
-               activeTab === 'nearby' && {
-                 backgroundColor: isLightBackground ? 'rgba(44, 62, 80, 0.1)' : 'rgba(255, 255, 255, 0.2)'
-               }
-             ]}
-             onPress={() => setActiveTab('nearby')}
-           >
-             <Text style={[
-               styles.tabText, 
-               activeTab === 'nearby' && styles.activeTabText,
-               { color: activeTab === 'nearby' ? (isLightBackground ? "#2C3E50" : "#FFFFFF") : (isLightBackground ? "#2C3E50" : "rgba(255, 255, 255, 0.7)") }
-             ]}>Nearby</Text>
-           </TouchableOpacity>
-           <TouchableOpacity 
-             style={[
-               styles.tab, 
-               activeTab === 'promotion' && styles.activeTab,
-               activeTab === 'promotion' && {
-                 backgroundColor: isLightBackground ? 'rgba(44, 62, 80, 0.1)' : 'rgba(255, 255, 255, 0.2)'
-               }
-             ]}
-             onPress={() => setActiveTab('promotion')}
-           >
-             <Text style={[
-               styles.tabText, 
-               activeTab === 'promotion' && styles.activeTabText,
-               { color: activeTab === 'promotion' ? (isLightBackground ? "#2C3E50" : "#FFFFFF") : (isLightBackground ? "#2C3E50" : "rgba(255, 255, 255, 0.7)") }
-             ]}>Promotion</Text>
-           </TouchableOpacity>
+      {/* Business Header - Only for business accounts */}
+      {isBusiness && (
+        <>
+          {/* Punch Logo at top left */}
+          <View style={styles.logoContainer}>
+            <View style={styles.logoSquare}>
+              <Image 
+                source={require('../../assets/icon.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+            </View>
+          </View>
+
+          {/* Profile Picture and Notifications at top right */}
+          <View style={styles.topRightContainer}>
+            {/* Notifications Icon */}
+            <TouchableOpacity 
+              style={styles.notificationContainer}
+              onPress={() => setNotificationsVisible(true)}
+            >
+              <View style={styles.notificationCircle}>
+                <AntDesign name="bells" size={20} color={COLORS.primary} />
+              </View>
+            </TouchableOpacity>
+            
+            {/* Profile Picture */}
+            <View style={styles.profileContainer}>
+              <View style={styles.profileCircle}>
+                <Image 
+                  source={userData?.profilePictureUrl ? { uri: userData.profilePictureUrl } : require('../../assets/images/icon.png')}
+                  style={styles.profileImage}
+                  resizeMode="cover"
+                />
+              </View>
+            </View>
+          </View>
+        </>
+      )}
+      
+                         {/* Header - Only for regular users */}
+       {!isBusiness && (
+         <View style={styles.simpleHeader}>
+           <View style={styles.tabContainer}>
+             {/* Regular users - show all tabs */}
+             <>
+               <TouchableOpacity 
+                 style={[
+                   styles.tab, 
+                   activeTab === 'explore' && styles.activeTab,
+                   activeTab === 'explore' && {
+                     backgroundColor: isLightBackground ? 'rgba(44, 62, 80, 0.1)' : 'rgba(255, 255, 255, 0.2)'
+                   }
+                 ]}
+                 onPress={() => setActiveTab('explore')}
+               >
+                 <Text style={[
+                   styles.tabText, 
+                   activeTab === 'explore' && styles.activeTabText,
+                   { color: activeTab === 'explore' ? (isLightBackground ? "#2C3E50" : "#FFFFFF") : (isLightBackground ? "#2C3E50" : "rgba(255, 255, 255, 0.7)") }
+                 ]}>Explore</Text>
+               </TouchableOpacity>
+               <TouchableOpacity 
+                 style={[
+                   styles.tab, 
+                   activeTab === 'nearby' && styles.activeTab,
+                   activeTab === 'nearby' && {
+                     backgroundColor: isLightBackground ? 'rgba(44, 62, 80, 0.1)' : 'rgba(255, 255, 255, 0.2)'
+                   }
+                 ]}
+                 onPress={() => setActiveTab('nearby')}
+               >
+                 <Text style={[
+                   styles.tabText, 
+                   activeTab === 'nearby' && styles.activeTabText,
+                   { color: activeTab === 'nearby' ? (isLightBackground ? "#2C3E50" : "#FFFFFF") : (isLightBackground ? "#2C3E50" : "rgba(255, 255, 255, 0.7)") }
+                 ]}>Nearby</Text>
+               </TouchableOpacity>
+               <TouchableOpacity 
+                 style={[
+                   styles.tab, 
+                   activeTab === 'promotion' && styles.activeTab,
+                   activeTab === 'promotion' && {
+                     backgroundColor: isLightBackground ? 'rgba(44, 62, 80, 0.1)' : 'rgba(255, 255, 255, 0.2)'
+                   }
+                 ]}
+                 onPress={() => setActiveTab('promotion')}
+               >
+                 <Text style={[
+                   styles.tabText, 
+                   activeTab === 'promotion' && styles.activeTabText,
+                   { color: activeTab === 'promotion' ? (isLightBackground ? "#2C3E50" : "#FFFFFF") : (isLightBackground ? "#2C3E50" : "rgba(255, 255, 255, 0.7)") }
+                 ]}>Promotion</Text>
+               </TouchableOpacity>
+             </>
+           ){'}'}
          </View>
-         <TouchableOpacity 
-           onPress={() => {
-             // Trigger scale animation
-             Animated.timing(searchScale, {
-               toValue: 0.93,
-               duration: 150,
-               useNativeDriver: true,
-             }).start(() => {
-               // Scale back to normal
+         {!isBusiness && (
+           <TouchableOpacity 
+             onPress={() => {
+               // Trigger scale animation
                Animated.timing(searchScale, {
-                 toValue: 1,
+                 toValue: 0.93,
                  duration: 150,
                  useNativeDriver: true,
-               }).start();
-             });
-             openSearch();
-           }}
-           style={styles.searchButton}
-           activeOpacity={0.7}
-         >
-           <Animated.View style={{ transform: [{ scale: searchScale }] }}>
-             <Feather name="search" size={24} color={isLightBackground ? "#2C3E50" : "#FFFFFF"} />
-           </Animated.View>
-         </TouchableOpacity>
+               }).start(() => {
+                 // Scale back to normal
+                 Animated.timing(searchScale, {
+                   toValue: 1,
+                   duration: 150,
+                   useNativeDriver: true,
+                 }).start();
+               });
+               openSearch();
+             }}
+             style={styles.searchButton}
+             activeOpacity={0.7}
+           >
+             <Animated.View style={{ transform: [{ scale: searchScale }] }}>
+               <Feather name="search" size={24} color={isLightBackground ? "#2C3E50" : "#FFFFFF"} />
+             </Animated.View>
+           </TouchableOpacity>
+         )}
        </View>
+       )}
 
-      
-
-             {/* Scrollable Restaurant List */}
-       <ScrollView 
-         style={styles.restaurantList}
-         showsVerticalScrollIndicator={false}
-         contentContainerStyle={styles.restaurantListContent}
-         snapToInterval={screenHeight}
-         snapToAlignment="start"
-         decelerationRate={0.8}
-         nestedScrollEnabled
-         scrollEnabled={!isImageScrolling}
-         scrollEventThrottle={16}
-         directionalLockEnabled={false}
-         bounces={false}
-         refreshControl={
-           <RefreshControl
-             refreshing={refreshing}
-             onRefresh={onRefresh}
-             tintColor="#fb7a20"
-             colors={["#fb7a20"]}
-           />
-         }
-       >
-         {filteredRestaurants.map((restaurant, index) => (
+             {/* Scrollable Restaurant List - Only for regular users */}
+       {!isBusiness && (
+         <>
+           {initialLoading ? (
+             <View style={styles.loadingContainer}>
+               <AntDesign name="loading1" size={48} color={COLORS.text.light} />
+               <Text style={styles.loadingText}>Loading restaurants...</Text>
+             </View>
+           ) : (
+             <ScrollView 
+               style={styles.restaurantList}
+               showsVerticalScrollIndicator={false}
+               contentContainerStyle={styles.restaurantListContent}
+               snapToInterval={screenHeight}
+               snapToAlignment="start"
+               decelerationRate={0.8}
+               nestedScrollEnabled
+               scrollEnabled={!isImageScrolling}
+               scrollEventThrottle={16}
+               directionalLockEnabled={false}
+               bounces={false}
+               refreshControl={
+                 <RefreshControl
+                   refreshing={refreshing}
+                   onRefresh={onRefresh}
+                   tintColor="#fb7a20"
+                   colors={["#fb7a20"]}
+                 />
+               }
+             >
+               {filteredRestaurants.map((restaurant, index) => (
            <View
              key={restaurant.id}
              style={styles.restaurantCard}
@@ -1197,20 +1482,42 @@ export default function Discover() {
                        : (typeof restaurant.cuisine === 'string' 
                           ? restaurant.cuisine.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0)
                           : []);
-                     return cuisineArray.slice(0, 1).map((tag: string, idx: number) => (
-                       <TouchableOpacity key={`cuisine-${idx}`} onPress={() => handleRestaurantPress(restaurant)}>
-                         <View style={styles.cardTag}>
-                           <Text style={styles.cardTagText}>{tag}</Text>
-                         </View>
-                       </TouchableOpacity>
-                     ));
+                     
+                     if (cuisineArray.length > 0) {
+                       const maxVisibleTags = 2; // Show maximum 2 cuisine tags
+                       const visibleCuisines = cuisineArray.slice(0, maxVisibleTags);
+                       const hasMoreCuisines = cuisineArray.length > maxVisibleTags;
+                       
+                       return (
+                         <>
+                           {visibleCuisines.map((cuisine, index) => (
+                             <TouchableOpacity key={index} onPress={() => handleRestaurantPress(restaurant)}>
+                               <View style={styles.cardTag}>
+                                 <Text style={styles.cardTagText}>{cuisine}</Text>
+                               </View>
+                             </TouchableOpacity>
+                           ))}
+                           {hasMoreCuisines && (
+                             <TouchableOpacity onPress={() => handleRestaurantPress(restaurant)}>
+                               <View style={styles.seeMoreTag}>
+                                 <Text style={styles.seeMoreTagText}>see more</Text>
+                               </View>
+                             </TouchableOpacity>
+                           )}
+                         </>
+                       );
+                     }
+                     return null;
                    })()}
                  </View>
                </View>
              </View>
            </View>
          ))}
-       </ScrollView>
+               </ScrollView>
+             )}
+           </>
+         )}
 
       {/* Search Overlay */}
       {searchActive && (
@@ -1254,6 +1561,217 @@ export default function Discover() {
             )}
           </ScrollView>
         </View>
+             )}
+
+      {/* Business Restaurant Display - Only for business accounts */}
+      {isBusiness && (
+        <>
+          {initialLoading ? (
+            <View style={styles.businessRestaurantContainer}>
+              <View style={styles.businessEmptyState}>
+                <AntDesign name="loading1" size={48} color={COLORS.text.light} />
+                <Text style={styles.businessEmptyTitle}>Loading...</Text>
+                <Text style={styles.businessEmptySubtext}>
+                  Setting up your business dashboard...
+                </Text>
+              </View>
+            </View>
+          ) : filteredRestaurants.length === 1 ? (
+        <View style={styles.businessRestaurantContainer}>
+          <ScrollView 
+            style={styles.businessRestaurantScroll}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.businessRestaurantContent}
+          >
+            {filteredRestaurants.map((restaurant, index) => (
+              <View key={restaurant.id}>
+                                 {/* Map Section */}
+                 <View style={styles.businessMapContainer}>
+                   <View style={styles.businessMapCard}>
+                     <View style={styles.businessMapContent}>
+                       {restaurant.latitude && restaurant.longitude ? (
+                         <View style={styles.businessMap}>
+                           <GoogleMapsView 
+                             restaurants={[restaurant]} 
+                             onRestaurantPress={() => {}}
+                           />
+                         </View>
+                       ) : (
+                         <View style={styles.businessMapPlaceholder}>
+                           <AntDesign name="enviromento" size={40} color={COLORS.text.light} />
+                           <Text style={styles.businessMapPlaceholderText}>Location not set</Text>
+                         </View>
+                       )}
+                     </View>
+                  </View>
+                </View>
+
+                {/* Restaurant Card Section */}
+                <View style={styles.businessRestaurantCard}>
+                  {/* Business Pictures Section */}
+                  <TouchableOpacity
+                    style={styles.businessPicturesSection}
+                    onPress={isShaking ? cancelDeletion : undefined}
+                    activeOpacity={isShaking ? 0.95 : 1}
+                  >
+                    <View style={styles.businessPicturesHeader}>
+                      <Text style={styles.businessPicturesTitle}>Business Pictures</Text>
+                      <TouchableOpacity 
+                        style={styles.addPictureButton}
+                        onPress={() => handleAddBusinessPicture(restaurant)}
+                      >
+                        <AntDesign name="plus" size={16} color={COLORS.primary} />
+                        <Text style={styles.addPictureText}>Add Picture</Text>
+                      </TouchableOpacity>
+                    </View>
+                    
+                    <ScrollView 
+                      horizontal 
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.businessPicturesScroll}
+                      contentContainerStyle={styles.businessPicturesContainer}
+                    >
+                      {restaurant.images && restaurant.images.length > 0 ? (
+                        restaurant.images.map((image: string, imageIndex: number) => {
+                          const isDeletable = deletablePictureIndex === imageIndex && isShaking;
+                          const shakeStyle = isDeletable ? {
+                            transform: [{
+                              translateX: shakeAnimation.interpolate({
+                                inputRange: [-1, 1],
+                                outputRange: [-5, 5],
+                              })
+                            }]
+                          } : {};
+                          
+                          return (
+                            <Animated.View 
+                              key={imageIndex} 
+                              style={[
+                                styles.businessPictureItem,
+                                isDeletable && styles.businessPictureItemDeletable,
+                                shakeStyle
+                              ]}
+                            >
+                              <TouchableOpacity
+                                onLongPress={() => handleLongPressPicture(imageIndex)}
+                                onPress={() => handlePictureTap(restaurant, imageIndex)}
+                                delayLongPress={500}
+                                activeOpacity={0.8}
+                              >
+                                <Image 
+                                  source={{ uri: image }}
+                                  style={styles.businessPicture}
+                                  resizeMode="cover"
+                                />
+                                {isDeletable && (
+                                  <View style={styles.deleteOverlay}>
+                                    <AntDesign name="delete" size={20} color="white" />
+                                    <Text style={styles.deleteOverlayText}>Tap to delete</Text>
+                                  </View>
+                                )}
+                              </TouchableOpacity>
+                            </Animated.View>
+                          );
+                        })
+                      ) : (
+                        <View style={styles.noPicturesContainer}>
+                          <AntDesign name="picture" size={32} color={COLORS.text.light} />
+                          <Text style={styles.noPicturesText}>No pictures yet</Text>
+                          <Text style={styles.noPicturesSubtext}>Add up to 6 pictures of your business</Text>
+                        </View>
+                      )}
+                      
+                      {/* Add more pictures if less than 6 */}
+                      {restaurant.images && restaurant.images.length < 6 && (
+                        <TouchableOpacity 
+                          style={styles.addMorePictureButton}
+                          onPress={() => handleAddBusinessPicture(restaurant)}
+                        >
+                          <AntDesign name="plus" size={24} color={COLORS.primary} />
+                          <Text style={styles.addMorePictureText}>Add Picture</Text>
+                        </TouchableOpacity>
+                      )}
+                    </ScrollView>
+                  </TouchableOpacity>
+                  
+                  {/* Restaurant Info */}
+                  <View style={styles.businessCardInfo}>
+                    <View style={styles.businessCardHeader}>
+                      <View style={styles.businessCardLogo}>
+                        {restaurant.logoUrl ? (
+                          <Image source={{ uri: restaurant.logoUrl }} style={styles.businessCardLogoImage} />
+                        ) : (
+                          <View style={[styles.businessCardLogoPlaceholder, { backgroundColor: restaurant.color }]}>
+                            <AntDesign name="home" size={20} color="white" />
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.businessCardTitle}>
+                        <Text style={styles.businessCardName}>{restaurant.name}</Text>
+                        <Text style={styles.businessCardCuisine}>{restaurant.cuisine || restaurant.cuisines?.join(', ')}</Text>
+                      </View>
+                      <TouchableOpacity 
+                        style={styles.businessEditButton}
+                        onPress={() => {
+                          setSelectedRestaurant(restaurant);
+                          setEditableModalVisible(true);
+                        }}
+                      >
+                        <AntDesign name="edit" size={20} color={COLORS.primary} />
+                      </TouchableOpacity>
+                    </View>
+                    
+                    <Text style={styles.businessCardDescription}>
+                      {restaurant.description || 'No description available'}
+                    </Text>
+                    
+                    <View style={styles.businessCardDetails}>
+                      {restaurant.phone && (
+                        <View style={styles.businessCardDetail}>
+                          <AntDesign name="phone" size={14} color={COLORS.text.secondary} />
+                          <Text style={styles.businessCardDetailText}>{restaurant.phone}</Text>
+                        </View>
+                      )}
+                      {restaurant.website && (
+                        <View style={styles.businessCardDetail}>
+                          <AntDesign name="link" size={14} color={COLORS.text.secondary} />
+                          <Text style={styles.businessCardDetailText}>{restaurant.website}</Text>
+                        </View>
+                      )}
+                      {restaurant.businessHours && (
+                        <View style={styles.businessCardDetail}>
+                          <AntDesign name="clockcircle" size={14} color={COLORS.text.secondary} />
+                          <Text style={styles.businessCardDetailText}>{restaurant.businessHours}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+          ) : (
+            <View style={styles.businessRestaurantContainer}>
+              <View style={styles.businessEmptyState}>
+                <AntDesign name="home" size={48} color={COLORS.text.light} />
+                <Text style={styles.businessEmptyTitle}>No Restaurant Found</Text>
+                <Text style={styles.businessEmptySubtext}>
+                  {filteredRestaurants.length === 0 
+                    ? "We couldn't find your restaurant. Please check your business account setup."
+                    : "Multiple restaurants found. Please contact support."
+                  }
+                </Text>
+                <TouchableOpacity 
+                  style={styles.businessEmptyButton}
+                  onPress={() => fetchRestaurants()}
+                >
+                  <Text style={styles.businessEmptyButtonText}>Refresh</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </>
       )}
 
       {/* Restaurant Modal */}
@@ -1264,6 +1782,98 @@ export default function Discover() {
         likedRestaurants={liked}
         onLikeUpdate={toggleLike}
       />
+
+      {/* Editable Restaurant Modal for Business Accounts */}
+      <EditableRestaurantModal
+        restaurant={selectedRestaurant}
+        visible={editableModalVisible}
+        onClose={() => setEditableModalVisible(false)}
+        onUpdate={(updatedRestaurant) => {
+          // Update the local state with the updated restaurant data
+          setRestaurants(prev => 
+            prev.map(r => r.id === updatedRestaurant.id ? updatedRestaurant : r)
+          );
+          setSelectedRestaurant(updatedRestaurant);
+        }}
+      />
+
+      {/* Notifications Modal for Business Accounts */}
+      <Modal
+        visible={notificationsVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setNotificationsVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.notificationsModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Notifications</Text>
+              <TouchableOpacity onPress={() => setNotificationsVisible(false)} style={styles.closeButton}>
+                <AntDesign name="close" size={24} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.notificationsList} showsVerticalScrollIndicator={false}>
+              {businessStats ? (
+                <View>
+                  <View style={styles.notificationItem}>
+                    <View style={[styles.notificationIcon, { backgroundColor: '#3498DB' }]}>
+                      <AntDesign name="barchart" size={16} color="white" />
+                    </View>
+                    <View style={styles.notificationContent}>
+                      <View style={styles.notificationHeader}>
+                        <Text style={styles.notificationTitle}>Daily Insight</Text>
+                        <Text style={styles.notificationTime}>Just now</Text>
+                      </View>
+                      <Text style={styles.notificationMessage}>
+                        Today you got {businessStats.weeklyViews || 0} views! Keep up the great work!
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.notificationItem}>
+                    <View style={[styles.notificationIcon, { backgroundColor: '#E74C3C' }]}>
+                      <AntDesign name="like1" size={16} color="white" />
+                    </View>
+                    <View style={styles.notificationContent}>
+                      <View style={styles.notificationHeader}>
+                        <Text style={styles.notificationTitle}>New Likes</Text>
+                        <Text style={styles.notificationTime}>2 hours ago</Text>
+                      </View>
+                      <Text style={styles.notificationMessage}>
+                        You received {businessStats.weeklyLikes || 0} new likes this week!
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.notificationItem}>
+                    <View style={[styles.notificationIcon, { backgroundColor: '#27AE60' }]}>
+                      <AntDesign name="eye" size={16} color="white" />
+                    </View>
+                    <View style={styles.notificationContent}>
+                      <View style={styles.notificationHeader}>
+                        <Text style={styles.notificationTitle}>Engagement Boost</Text>
+                        <Text style={styles.notificationTime}>1 day ago</Text>
+                      </View>
+                      <Text style={styles.notificationMessage}>
+                        Your restaurant has been viewed {businessStats.totalViews || 0} times!
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.emptyNotifications}>
+                  <AntDesign name="bells" size={48} color={COLORS.text.light} />
+                  <Text style={styles.emptyText}>No notifications yet</Text>
+                  <Text style={styles.emptySubtext}>We'll notify you about new likes, views, and insights</Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+
     </View>
   );
 }
@@ -1271,13 +1881,26 @@ export default function Discover() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent', // Make background transparent
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingText: {
+    fontSize: 18,
+    color: COLORS.text.secondary,
+    marginTop: 16,
+    fontFamily: 'Figtree_500Medium',
+  },
+  tagSeparator: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginHorizontal: 8,
+    fontFamily: 'Figtree_400Regular',
+  },
+
 
      simpleHeader: {
        position: 'absolute',
@@ -1681,6 +2304,22 @@ const styles = StyleSheet.create({
      textShadowOffset: { width: 0, height: 1 },
      textShadowRadius: 2,
    },
+   seeMoreTag: {
+     backgroundColor: 'rgba(251, 122, 32, 0.9)', // Orange background
+     paddingHorizontal: 12,
+     paddingVertical: 6,
+     borderRadius: 16,
+     borderWidth: 1,
+     borderColor: 'rgba(251, 122, 32, 1)', // Solid orange border
+   },
+   seeMoreTagText: {
+     color: '#fff',
+     fontSize: 14,
+     fontWeight: '700', // Bolder than regular tags
+     textShadowColor: 'rgba(0,0,0,0.3)',
+     textShadowOffset: { width: 0, height: 1 },
+     textShadowRadius: 2,
+   },
    // Horizontal image scrolling styles
    imageScrollView: {
      width: '100%',
@@ -1747,5 +2386,524 @@ const styles = StyleSheet.create({
    restaurantLogoImage: {
      width: '100%',
      height: '100%',
+   },
+   businessTabContainer: {
+     flexDirection: 'row',
+     alignItems: 'center',
+     justifyContent: 'space-between',
+     width: '100%',
+   },
+   editButton: {
+     width: 32,
+     height: 32,
+     borderRadius: 16,
+     backgroundColor: 'rgba(255, 255, 255, 0.2)',
+     justifyContent: 'center',
+     alignItems: 'center',
+     borderWidth: 1,
+     borderColor: 'rgba(255, 255, 255, 0.3)',
+     position: 'absolute',
+     right: 24, // Same as header paddingHorizontal
+   },
+   businessRestaurantContainer: {
+     flex: 1,
+     marginTop: 120, // Space for header
+   },
+   businessRestaurantScroll: {
+     flex: 1,
+   },
+   businessRestaurantContent: {
+     paddingHorizontal: 20,
+     paddingBottom: 40,
+   },
+   businessRestaurantCard: {
+     backgroundColor: 'rgba(255, 255, 255, 0.15)',
+     borderRadius: 16,
+     marginBottom: 20,
+     shadowColor: '#000',
+     shadowOffset: { width: 0, height: 2 },
+     shadowOpacity: 0.1,
+     shadowRadius: 8,
+     elevation: 4,
+     overflow: 'hidden',
+     borderWidth: 1.5,
+     borderColor: 'rgba(0, 0, 0, 0.6)',
+     backdropFilter: 'blur(10px)',
+   },
+   businessCardImageContainer: {
+     height: 200,
+     backgroundColor: '#f5f5f5',
+   },
+   businessCardImage: {
+     width: '100%',
+     height: '100%',
+   },
+   businessCardImagePlaceholder: {
+     width: '100%',
+     height: '100%',
+     justifyContent: 'center',
+     alignItems: 'center',
+   },
+   businessCardInfo: {
+     padding: 20,
+     backgroundColor: 'rgba(255, 255, 255, 0.1)',
+     borderRadius: 12,
+     margin: 8,
+     borderWidth: 1,
+     borderColor: 'rgba(255, 255, 255, 0.15)',
+   },
+   businessCardHeader: {
+     flexDirection: 'row',
+     alignItems: 'center',
+     marginBottom: 16,
+   },
+   businessCardLogo: {
+     width: 50,
+     height: 50,
+     borderRadius: 25,
+     overflow: 'hidden',
+     marginRight: 12,
+   },
+   businessCardLogoImage: {
+     width: '100%',
+     height: '100%',
+   },
+   businessCardLogoPlaceholder: {
+     width: '100%',
+     height: '100%',
+     justifyContent: 'center',
+     alignItems: 'center',
+   },
+   businessCardTitle: {
+     flex: 1,
+   },
+   businessCardName: {
+     fontSize: 20,
+     fontWeight: 'bold',
+     color: COLORS.primary,
+     marginBottom: 4,
+   },
+   businessCardCuisine: {
+     fontSize: 14,
+     color: COLORS.text.secondary,
+   },
+   businessEditButton: {
+     width: 40,
+     height: 40,
+     borderRadius: 20,
+     backgroundColor: 'rgba(251, 122, 32, 0.1)',
+     justifyContent: 'center',
+     alignItems: 'center',
+   },
+   businessCardDescription: {
+     fontSize: 14,
+     color: COLORS.text.secondary,
+     lineHeight: 20,
+     marginBottom: 16,
+   },
+   businessCardDetails: {
+     gap: 8,
+   },
+   businessCardDetail: {
+     flexDirection: 'row',
+     alignItems: 'center',
+   },
+   businessCardDetailText: {
+     fontSize: 14,
+     color: COLORS.text.secondary,
+     marginLeft: 8,
+     flex: 1,
+   },
+   // Map section styles
+   businessMapContainer: {
+     marginBottom: 20,
+   },
+   businessMapCard: {
+     backgroundColor: 'rgba(255, 255, 255, 0.15)',
+     borderRadius: 16,
+     shadowColor: '#000',
+     shadowOffset: { width: 0, height: 2 },
+     shadowOpacity: 0.1,
+     shadowRadius: 8,
+     elevation: 4,
+     overflow: 'hidden',
+     backdropFilter: 'blur(10px)',
+   },
+   businessMapHeader: {
+     flexDirection: 'row',
+     justifyContent: 'space-between',
+     alignItems: 'center',
+     padding: 16,
+     borderBottomWidth: 1,
+     borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+   },
+   businessMapTitle: {
+     fontSize: 16,
+     fontWeight: 'bold',
+     color: COLORS.primary,
+   },
+   businessMapContent: {
+     height: 200,
+     backgroundColor: '#f5f5f5',
+   },
+   businessMap: {
+     width: '100%',
+     height: '100%',
+   },
+   businessMapPlaceholder: {
+     width: '100%',
+     height: '100%',
+     justifyContent: 'center',
+     alignItems: 'center',
+     backgroundColor: '#f5f5f5',
+   },
+   businessMapPlaceholderText: {
+     fontSize: 14,
+     color: COLORS.text.light,
+     marginTop: 8,
+   },
+   businessMapAddress: {
+     flexDirection: 'row',
+     alignItems: 'center',
+     padding: 16,
+     backgroundColor: 'rgba(251, 122, 32, 0.05)',
+   },
+   businessMapAddressText: {
+     fontSize: 14,
+     color: COLORS.text.secondary,
+     marginLeft: 8,
+     flex: 1,
+   },
+   // Business header styles
+   logoContainer: {
+     position: 'absolute',
+     top: 60,
+     left: 20,
+     zIndex: 10,
+   },
+   logoSquare: {
+     width: 50,
+     height: 50,
+     backgroundColor: 'rgba(255, 255, 255, 0.9)',
+     borderRadius: 12,
+     justifyContent: 'center',
+     alignItems: 'center',
+     shadowColor: '#000',
+     shadowOffset: { width: 0, height: 2 },
+     shadowOpacity: 0.1,
+     shadowRadius: 4,
+     elevation: 3,
+   },
+   logoImage: {
+     width: 40,
+     height: 40,
+   },
+   topRightContainer: {
+     position: 'absolute',
+     top: 60,
+     right: 20,
+     zIndex: 10,
+     flexDirection: 'row',
+     alignItems: 'center',
+     gap: 12,
+   },
+   notificationContainer: {
+     // No additional styling needed for the TouchableOpacity
+   },
+   notificationCircle: {
+     width: 44,
+     height: 44,
+     borderRadius: 22,
+     backgroundColor: 'rgba(255, 255, 255, 0.9)',
+     justifyContent: 'center',
+     alignItems: 'center',
+     shadowColor: '#000',
+     shadowOffset: { width: 0, height: 2 },
+     shadowOpacity: 0.1,
+     shadowRadius: 4,
+     elevation: 3,
+   },
+   profileContainer: {
+     // Remove absolute positioning since it's now inside topRightContainer
+   },
+   profileCircle: {
+     width: 50,
+     height: 50,
+     borderRadius: 25,
+     backgroundColor: 'rgba(255, 255, 255, 0.9)',
+     justifyContent: 'center',
+     alignItems: 'center',
+     shadowColor: '#000',
+     shadowOffset: { width: 0, height: 2 },
+     shadowOpacity: 0.1,
+     shadowRadius: 4,
+     elevation: 3,
+     overflow: 'hidden',
+   },
+   profileImage: {
+     width: 46,
+     height: 46,
+     borderRadius: 23,
+   },
+   // Notifications modal styles
+   modalOverlay: {
+     flex: 1,
+     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+     justifyContent: 'center',
+     alignItems: 'center',
+   },
+   notificationsModal: {
+     width: '90%',
+     height: '80%',
+     backgroundColor: 'white',
+     borderRadius: 20,
+     shadowColor: '#000',
+     shadowOffset: { width: 0, height: 10 },
+     shadowOpacity: 0.25,
+     shadowRadius: 20,
+     elevation: 10,
+   },
+   modalHeader: {
+     flexDirection: 'row',
+     justifyContent: 'space-between',
+     alignItems: 'center',
+     padding: 20,
+     borderBottomWidth: 1,
+     borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+   },
+   modalTitle: {
+     color: COLORS.primary,
+     fontSize: 20,
+     fontWeight: 'bold',
+   },
+   closeButton: {
+     padding: 4,
+   },
+   notificationsList: {
+     flex: 1,
+     paddingHorizontal: 20,
+   },
+   notificationItem: {
+     flexDirection: 'row',
+     paddingVertical: 16,
+     borderBottomWidth: 1,
+     borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+   },
+   notificationIcon: {
+     width: 32,
+     height: 32,
+     borderRadius: 16,
+     justifyContent: 'center',
+     alignItems: 'center',
+     marginRight: 12,
+   },
+   notificationContent: {
+     flex: 1,
+   },
+   notificationHeader: {
+     flexDirection: 'row',
+     justifyContent: 'space-between',
+     alignItems: 'center',
+     marginBottom: 4,
+   },
+   notificationTitle: {
+     color: COLORS.primary,
+     fontSize: 14,
+     fontWeight: 'bold',
+   },
+   notificationTime: {
+     color: COLORS.text.light,
+     fontSize: 12,
+   },
+   notificationMessage: {
+     color: COLORS.text.secondary,
+     fontSize: 14,
+     lineHeight: 20,
+   },
+   emptyNotifications: {
+     flex: 1,
+     justifyContent: 'center',
+     alignItems: 'center',
+     paddingVertical: 60,
+   },
+   emptyText: {
+     color: COLORS.text.secondary,
+     marginTop: 16,
+     marginBottom: 8,
+     fontSize: 16,
+     fontWeight: 'medium',
+   },
+   emptySubtext: {
+     color: COLORS.text.light,
+     textAlign: 'center',
+     fontSize: 14,
+   },
+   // Business pictures section styles
+   businessPicturesSection: {
+     padding: 20,
+     borderBottomWidth: 1,
+     borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+   },
+   businessPicturesHeader: {
+     flexDirection: 'row',
+     justifyContent: 'space-between',
+     alignItems: 'center',
+     marginBottom: 16,
+   },
+   businessPicturesTitle: {
+     fontSize: 18,
+     fontWeight: 'bold',
+     color: COLORS.primary,
+   },
+   addPictureButton: {
+     flexDirection: 'row',
+     alignItems: 'center',
+     backgroundColor: 'rgba(251, 122, 32, 0.1)',
+     paddingHorizontal: 12,
+     paddingVertical: 6,
+     borderRadius: 16,
+     gap: 4,
+   },
+   addPictureText: {
+     fontSize: 14,
+     color: COLORS.primary,
+     fontWeight: '500',
+   },
+   businessPicturesScroll: {
+     flexGrow: 0,
+   },
+   businessPicturesContainer: {
+     paddingRight: 20,
+   },
+   businessPictureItem: {
+     position: 'relative',
+     marginRight: 12,
+   },
+   businessPicture: {
+     width: 120,
+     height: 90,
+     borderRadius: 12,
+   },
+   deletePictureButton: {
+     position: 'absolute',
+     top: 4,
+     right: 4,
+     backgroundColor: 'rgba(0, 0, 0, 0.6)',
+     borderRadius: 10,
+     width: 20,
+     height: 20,
+     justifyContent: 'center',
+     alignItems: 'center',
+   },
+   noPicturesContainer: {
+     alignItems: 'center',
+     justifyContent: 'center',
+     paddingVertical: 40,
+     paddingHorizontal: 20,
+   },
+   noPicturesText: {
+     fontSize: 16,
+     color: COLORS.text.secondary,
+     marginTop: 12,
+     fontWeight: '500',
+   },
+   noPicturesSubtext: {
+     fontSize: 14,
+     color: COLORS.text.light,
+     marginTop: 4,
+     textAlign: 'center',
+   },
+   addMorePictureButton: {
+     width: 120,
+     height: 90,
+     borderRadius: 12,
+     borderWidth: 2,
+     borderColor: COLORS.primary,
+     borderStyle: 'dashed',
+     justifyContent: 'center',
+     alignItems: 'center',
+     backgroundColor: 'rgba(251, 122, 32, 0.05)',
+   },
+   addMorePictureText: {
+     fontSize: 12,
+     color: COLORS.primary,
+     marginTop: 4,
+     textAlign: 'center',
+   },
+   // Business empty state styles
+   businessEmptyState: {
+     flex: 1,
+     justifyContent: 'center',
+     alignItems: 'center',
+     paddingVertical: 60,
+     paddingHorizontal: 20,
+   },
+   businessEmptyTitle: {
+     fontSize: 20,
+     fontWeight: 'bold',
+     color: COLORS.primary,
+     marginTop: 16,
+     marginBottom: 8,
+   },
+   businessEmptySubtext: {
+     fontSize: 16,
+     color: COLORS.text.secondary,
+     textAlign: 'center',
+     lineHeight: 24,
+     marginBottom: 24,
+   },
+   businessEmptyButton: {
+     backgroundColor: COLORS.primary,
+     paddingHorizontal: 24,
+     paddingVertical: 12,
+     borderRadius: 12,
+   },
+   businessEmptyButtonText: {
+     color: 'white',
+     fontSize: 16,
+     fontWeight: '600',
+   },
+   // Business picture deletion styles
+   businessPictureItemDeletable: {
+     borderWidth: 2,
+     borderColor: '#E74C3C',
+     borderRadius: 12,
+   },
+   deleteOverlay: {
+     position: 'absolute',
+     top: 0,
+     left: 0,
+     right: 0,
+     bottom: 0,
+     backgroundColor: 'rgba(231, 76, 60, 0.8)',
+     borderRadius: 12,
+     justifyContent: 'center',
+     alignItems: 'center',
+   },
+   deleteOverlayText: {
+     color: 'white',
+     fontSize: 12,
+     fontWeight: '600',
+     marginTop: 4,
+   },
+   // Business pictures header button styles
+   businessPicturesHeaderButtons: {
+     flexDirection: 'row',
+     alignItems: 'center',
+     gap: 12,
+   },
+   cancelDeletionButton: {
+     flexDirection: 'row',
+     alignItems: 'center',
+     backgroundColor: 'rgba(231, 76, 60, 0.1)',
+     paddingHorizontal: 12,
+     paddingVertical: 6,
+     borderRadius: 16,
+     gap: 4,
+   },
+   cancelDeletionText: {
+     fontSize: 14,
+     color: '#E74C3C',
+     fontWeight: '500',
    },
 });

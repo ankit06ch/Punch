@@ -8,8 +8,9 @@ import MapView, { Marker, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
+import { trackRestaurantLike, trackRestaurantMapInteraction } from '../../utils/restaurantTracking';
 import CustomText from '../../components/CustomText';
 import RestaurantModal from '../../components/RestaurantModal';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, withTiming } from 'react-native-reanimated';
@@ -84,22 +85,7 @@ export default function FullMapScreen() {
     return distance < 1 ? `${(distance * 5280).toFixed(0)} ft` : `${distance.toFixed(1)} mi`;
   };
 
-  // Track restaurant map interaction
-  const trackRestaurantMapInteraction = async (restaurantId: string) => {
-    if (!auth.currentUser) return;
-    
-    try {
-      const restaurantRef = doc(db, 'restaurants', restaurantId);
-      await updateDoc(restaurantRef, {
-        totalViews: increment(1),
-        lastViewDate: new Date(),
-        mapInteractions: increment(1), // Track map-specific interactions
-      });
-      console.log(`Tracked map interaction for restaurant ${restaurantId}`);
-    } catch (error) {
-      console.error('Error tracking restaurant map interaction:', error);
-    }
-  };
+
 
   useEffect(() => {
     fetchRestaurants();
@@ -267,10 +253,14 @@ export default function FullMapScreen() {
       await updateDoc(userRef, { likedRestaurants: arrayRemove(restaurantId) });
       newLiked = liked.filter(id => id !== restaurantId);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      // Track the unlike action
+      await trackRestaurantLike(restaurantId, user.uid, false);
     } else {
       await updateDoc(userRef, { likedRestaurants: arrayUnion(restaurantId) });
       newLiked = [...liked, restaurantId];
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      // Track the like action
+      await trackRestaurantLike(restaurantId, user.uid, true);
     }
     setLiked(newLiked);
   }

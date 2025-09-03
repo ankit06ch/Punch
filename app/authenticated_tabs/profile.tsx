@@ -4,11 +4,14 @@ import { Ionicons, Feather, AntDesign } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, query, where, orderBy, onSnapshot, deleteDoc, writeBatch, serverTimestamp, increment } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
+import { trackRestaurantLike } from '../../utils/restaurantTracking';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import profileStyles from '../styles/profileStyles';
 import { PanResponder } from 'react-native';
 import RestaurantModal from '../../components/RestaurantModal';
+import EditableRestaurantModal from '../../components/EditableRestaurantModal';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { pickProfilePicture, uploadProfilePicture, deleteProfilePicture } from '../../utils/profilePictureUtils';
 import {
   useFonts,
@@ -84,6 +87,9 @@ export default function Profile() {
   const [messageSearchQuery, setMessageSearchQuery] = useState('');
   const [newUserResults, setNewUserResults] = useState<any[]>([]);
   const [conversationsLoading, setConversationsLoading] = useState(true);
+  const [isBusiness, setIsBusiness] = useState(false);
+  const [businessRestaurant, setBusinessRestaurant] = useState<any>(null);
+  const [editableModalVisible, setEditableModalVisible] = useState(false);
 
   // Search for new users (exclude current conversations and self)
   useEffect(() => {
@@ -166,6 +172,7 @@ export default function Profile() {
   ).current;
   const [selectedProfileTab, setSelectedProfileTab] = useState<'liked' | 'rewards'>('liked');
   const [likedRestaurantsWithNames, setLikedRestaurantsWithNames] = useState<any[]>([]);
+  const [loadingLikedRestaurants, setLoadingLikedRestaurants] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
   const [restaurantModalVisible, setRestaurantModalVisible] = useState(false);
@@ -341,14 +348,30 @@ export default function Profile() {
     // Set up real-time listener for user data changes
     const user = auth.currentUser;
     if (user) {
-      const unsubscribe = onSnapshot(doc(db, 'users', user.uid), async (doc) => {
-        if (doc.exists() && isMounted) {
-          const data = doc.data();
+      const unsubscribe = onSnapshot(doc(db, 'users', user.uid), async (userDoc) => {
+        if (userDoc.exists() && isMounted) {
+          const data = userDoc.data();
           setUserData(data);
+          setIsBusiness(data.isBusiness || false);
+          
           if (data.privacySettings) {
             setPrivacySettings(data.privacySettings);
           }
           setHasSeenPunchoIntro(data.hasSeenPunchoIntro || false);
+          
+          // If business account, fetch restaurant data
+          if (data.isBusiness) {
+            try {
+              const restaurantDocRef = doc(db, 'restaurants', user.uid);
+              const restaurantDocSnap = await getDoc(restaurantDocRef);
+              if (restaurantDocSnap.exists()) {
+                const restaurantData = restaurantDocSnap.data();
+                setBusinessRestaurant({ id: user.uid, ...restaurantData });
+              }
+            } catch (error) {
+              console.error('Error fetching business restaurant:', error);
+            }
+          }
           
           // Update liked restaurants when they change
           if (isMounted) {
@@ -365,6 +388,41 @@ export default function Profile() {
     
     return () => { isMounted = false; };
   }, []);
+
+  // Fetch business restaurant data when isBusiness changes
+  useEffect(() => {
+    const fetchBusinessRestaurant = async () => {
+      console.log('Fetching business restaurant - isBusiness:', isBusiness, 'auth.currentUser:', auth.currentUser?.uid);
+      if (!isBusiness || !auth.currentUser) return;
+      
+      try {
+        const restaurantDocRef = doc(db, 'restaurants', auth.currentUser.uid);
+        const restaurantDocSnap = await getDoc(restaurantDocRef);
+        if (restaurantDocSnap.exists()) {
+          const restaurantData = restaurantDocSnap.data();
+          console.log('Restaurant data found:', restaurantData);
+          setBusinessRestaurant({ id: auth.currentUser.uid, ...restaurantData });
+        } else {
+          console.log('No restaurant document found for user:', auth.currentUser.uid);
+        }
+      } catch (error) {
+        console.error('Error fetching business restaurant:', error);
+      }
+    };
+
+    fetchBusinessRestaurant();
+  }, [isBusiness]);
+
+  // Show restaurant modal for business accounts when profile page loads
+  useEffect(() => {
+    console.log('Profile useEffect - isBusiness:', isBusiness, 'businessRestaurant:', businessRestaurant);
+    if (isBusiness && businessRestaurant) {
+      console.log('Setting editableModalVisible to true');
+      setEditableModalVisible(true);
+    }
+  }, [isBusiness, businessRestaurant]);
+
+
 
   // Listen for notifications
   useEffect(() => {
@@ -473,9 +531,11 @@ export default function Profile() {
     if (likedRestaurantIds.length === 0) {
       setLikedRestaurantsWithNames([]);
       setLiked([]);
+      setLoadingLikedRestaurants(false);
       return;
     }
     
+    setLoadingLikedRestaurants(true);
     const restaurantsWithNames = [];
     for (const restaurantId of likedRestaurantIds) {
       try {
@@ -509,6 +569,7 @@ export default function Profile() {
     }
     setLikedRestaurantsWithNames(restaurantsWithNames);
     setLiked(likedRestaurantIds);
+    setLoadingLikedRestaurants(false);
   };
 
   // Expose a reusable fetch function for refreshers and other effects
@@ -561,12 +622,16 @@ export default function Profile() {
           });
           setLiked(currentLiked.filter((id: string) => id !== restaurantId));
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          // Track the unlike action
+          await trackRestaurantLike(restaurantId, user.uid, false);
         } else {
           await updateDoc(userRef, {
             likedRestaurants: arrayUnion(restaurantId)
           });
           setLiked([...currentLiked, restaurantId]);
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          // Track the like action
+          await trackRestaurantLike(restaurantId, user.uid, true);
         }
       }
     } catch (error) {
@@ -1234,10 +1299,11 @@ export default function Profile() {
         </View>
       </View>
 
-      {/* Profile content with zoom-out animation */}
-      <Animated.View style={[styles.profileContent, { transform: [{ scale: profileScale }] }]}> 
-        <View style={{ width: '100%', alignItems: 'center' }}>
-          <View style={styles.avatarContainer}>
+            {/* Profile content with zoom-out animation - Only show for non-business accounts */}
+      {!isBusiness && (
+        <Animated.View style={[styles.profileContent, { transform: [{ scale: profileScale }] }]}> 
+          <View style={{ width: '100%', alignItems: 'center' }}>
+            <View style={styles.avatarContainer}>
             <TouchableOpacity 
               style={styles.avatarCircle} 
               onPress={handleProfilePictureChange}
@@ -1363,7 +1429,23 @@ export default function Profile() {
         {/* Liked Restaurants Section */}
         {selectedProfileTab === 'liked' && (
           <View style={{ width: '100%', marginTop: 8 }}>
-            {likedRestaurantsWithNames.length > 0 ? (
+            {loadingLikedRestaurants ? (
+              <View style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 40,
+                paddingHorizontal: 20,
+              }}>
+                <ActivityIndicator size="large" color="#fb7a20" />
+                <Text style={{
+                  color: '#7F8C8D',
+                  fontSize: 16,
+                  textAlign: 'center',
+                  marginTop: 16,
+                  fontFamily: 'Figtree_500Medium',
+                }}>Punching in your cravings…</Text>
+              </View>
+            ) : likedRestaurantsWithNames.length > 0 ? (
               likedRestaurantsWithNames.map((restaurant: any, idx: number) => (
                 <TouchableOpacity 
                   key={restaurant.id || idx} 
@@ -1426,6 +1508,15 @@ export default function Profile() {
         )}
         </ScrollView>
       </Animated.View>
+      )}
+
+      {/* Business Account Loading State */}
+      {isBusiness && !businessRestaurant && (
+        <View style={[styles.profileContent, { justifyContent: 'center', alignItems: 'center' }]}>
+          <ActivityIndicator size="large" color={ORANGE} />
+          <Text style={{ color: '#888', marginTop: 16 }}>Loading your business...</Text>
+        </View>
+      )}
 
       {/* Orange Search Overlay with Spilling Animation */}
       {searchActive && (
@@ -1905,6 +1996,18 @@ export default function Profile() {
               />
               )}
             </View>
+            {/* White gradient overlay from bottom */}
+            <LinearGradient
+              colors={['transparent', 'rgba(255, 255, 255, 0.3)', 'rgba(255, 255, 255, 0.6)']}
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 60,
+                pointerEvents: 'none',
+              }}
+            />
           </Animated.View>
         </TouchableOpacity>
       </Modal>
@@ -2086,6 +2189,13 @@ export default function Profile() {
         likedRestaurants={liked}
         onLikeUpdate={toggleLike}
       />
+
+      {/* Editable Restaurant Modal for Business Accounts */}
+      <EditableRestaurantModal
+        restaurant={businessRestaurant}
+        visible={editableModalVisible}
+        onClose={() => setEditableModalVisible(false)}
+      />
     </View>
   );
 }
@@ -2216,11 +2326,6 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 40,
     maxHeight: '80%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
   },
   modalHandle: {
     width: 40,
@@ -2259,11 +2364,6 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 40,
     maxHeight: '60%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
   },
   messagesContent: {
     flex: 1,

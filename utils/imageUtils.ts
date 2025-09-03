@@ -43,7 +43,14 @@ export const uploadProfilePicture = async (
   type: 'profile' | 'logo'
 ): Promise<string | null> => {
   try {
-    const response = await fetch(imageUri);
+    // Sanitize the image URI to ensure it's secure
+    const secureUri = sanitizeImageUri(imageUri);
+    if (!secureUri) {
+      console.error('Invalid or insecure image URI:', imageUri);
+      return null;
+    }
+    
+    const response = await fetch(secureUri);
     const blob = await response.blob();
 
     const fileName = `${type}-${Date.now()}.jpg`;

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, FlatList, Dimensions, TouchableOpacity, StyleSheet, TextInput, ScrollView, Modal, Animated, PanResponder, Image } from 'react-native';
+import { View, Text, FlatList, Dimensions, TouchableOpacity, StyleSheet, TextInput, ScrollView, Modal, Animated, PanResponder, Image, Alert, Platform } from 'react-native';
+import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
-import { collection, getDocs, doc, getDoc, updateDoc, arrayRemove, arrayUnion, onSnapshot, increment } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, updateDoc, arrayRemove, arrayUnion, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
+import { trackRestaurantLike, trackRestaurantWalletInteraction } from '../../utils/restaurantTracking';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomText from '../../components/CustomText';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
@@ -60,22 +62,7 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 };
 
-// Track restaurant wallet interaction
-const trackRestaurantWalletInteraction = async (restaurantId: string) => {
-  if (!auth.currentUser) return;
-  
-  try {
-    const restaurantRef = doc(db, 'restaurants', restaurantId);
-    await updateDoc(restaurantRef, {
-      totalViews: increment(1),
-      lastViewDate: new Date(),
-      walletInteractions: increment(1), // Track wallet-specific interactions
-    });
-    console.log(`Tracked wallet interaction for restaurant ${restaurantId}`);
-  } catch (error) {
-    console.error('Error tracking restaurant wallet interaction:', error);
-  }
-};
+
 
 // Sophisticated card colors
 const CARD_COLORS = [
@@ -471,6 +458,7 @@ const SAMPLE_TRANSACTIONS = [
 ];
 
 export default function Wallet() {
+  const router = useRouter();
   // Load Figtree fonts
   const [fontsLoaded] = useFonts({
     Figtree_300Light,
@@ -503,6 +491,8 @@ export default function Wallet() {
   const [userPunchCards, setUserPunchCards] = useState<{[key: string]: number}>({});
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [lastUsedDates, setLastUsedDates] = useState<{[key: string]: Date}>({});
+  const [isBusiness, setIsBusiness] = useState(false);
+  const [currentPromotions, setCurrentPromotions] = useState<any[]>([]);
   const flatListRef = useRef<FlatList<any>>(null);
 
   // Get user location
@@ -560,6 +550,7 @@ export default function Wallet() {
         const userData = doc.data();
         setLiked(userData.likedRestaurants || []);
         setUserPunchCards(userData.punchCards || {}); // Get real punch card data
+        setIsBusiness(userData.isBusiness || false); // Get business account status
       }
     }, (error: any) => {
       console.error('Error listening to liked restaurants:', error);
@@ -567,6 +558,13 @@ export default function Wallet() {
 
     return () => unsubscribe();
   }, []);
+
+  // Fetch promotions when business status is determined
+  useEffect(() => {
+    if (isBusiness) {
+      fetchPromotions();
+    }
+  }, [isBusiness]);
 
   // Update restaurants with real punch data when userPunchCards changes
   useEffect(() => {
@@ -745,6 +743,8 @@ export default function Wallet() {
             likedRestaurants: arrayRemove(restaurantId)
           });
           setLiked(currentLiked.filter((id: string) => id !== restaurantId));
+          // Track the unlike action
+          await trackRestaurantLike(restaurantId, user.uid, false);
         } else {
           await updateDoc(userRef, {
             likedRestaurants: arrayUnion(restaurantId)
@@ -757,6 +757,9 @@ export default function Wallet() {
               punchCards: arrayUnion(restaurantId)
             });
           }
+          
+          // Track the like action
+          await trackRestaurantLike(restaurantId, user.uid, true);
         }
       }
     } catch (error) {
@@ -822,6 +825,70 @@ export default function Wallet() {
     setTransactionSearchQuery(query);
   };
 
+  // Promotion management functions
+  const handleEditPromotion = (promotion: any) => {
+    router.push({
+      pathname: '/screens/promotions',
+      params: { promotion: JSON.stringify(promotion) }
+    });
+  };
+
+  const fetchPromotions = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const restaurantRef = doc(db, 'restaurants', user.uid);
+      const restaurantDoc = await getDoc(restaurantRef);
+      
+      if (restaurantDoc.exists()) {
+        const data = restaurantDoc.data();
+        setCurrentPromotions(data.activeRewards || []);
+      }
+    } catch (error) {
+      console.error('Error fetching promotions:', error);
+    }
+  };
+
+  const handleDeletePromotion = async (promotionId: string) => {
+    Alert.alert(
+      'Delete Promotion',
+      'Are you sure you want to delete this promotion?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const user = auth.currentUser;
+              if (!user) return;
+
+              const restaurantRef = doc(db, 'restaurants', user.uid);
+              const restaurantDoc = await getDoc(restaurantRef);
+              
+              if (restaurantDoc.exists()) {
+                const currentData = restaurantDoc.data();
+                const currentRewards = currentData.activeRewards || [];
+                
+                const updatedRewards = currentRewards.filter((reward: any) => reward.id !== promotionId);
+                await updateDoc(restaurantRef, { activeRewards: updatedRewards });
+
+                // Refresh promotions data
+                await fetchPromotions();
+                
+                Alert.alert('Success', 'Promotion deleted successfully!');
+              }
+            } catch (error) {
+              console.error('Error deleting promotion:', error);
+              Alert.alert('Error', 'Failed to delete promotion. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems && viewableItems.length > 0) {
       setCurrentCardIndex(viewableItems[0].index || 0);
@@ -857,7 +924,7 @@ export default function Wallet() {
         <View style={styles.fixedGlassHeader}>
           <BlurView intensity={20} tint="light" style={styles.glassHeader}>
             <CustomText variant="title" weight="bold" fontFamily="figtree" style={styles.glassTitle}>
-              My Wallet
+              {isBusiness ? 'Manage my Restaurant' : 'My Wallet'}
             </CustomText>
           </BlurView>
         </View>
@@ -868,88 +935,176 @@ export default function Wallet() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Punch Cards Section */}
-          <View style={styles.punchCardSection}>
-            <View style={styles.punchCardHeader}>
-              {!searchVisible && (
-                <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.punchCardTitle}>
-                  Punch Cards ({filteredRestaurants.length})
-                </CustomText>
-              )}
-              
-              {/* Search Bar - Full width overlay */}
-              {searchVisible && (
-                <Animated.View 
-                  style={[
-                    styles.fullWidthSearchContainer,
-                    {
-                      transform: [{ translateX: searchAnimation }]
-                    }
-                  ]}
-                >
-                  <AnimatedSearchOverlay 
-                    visible={searchVisible} 
-                    onSearch={handleSearch} 
-                    onClose={handleSearchClose}
-                  />
-                </Animated.View>
-              )}
-              
-              <TouchableOpacity style={styles.searchIconButton} onPress={handleSearchToggle}>
-                <AntDesign name={searchVisible ? "close" : "search1"} size={20} color={COLORS.primary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Filter Chips */}
-            <FilterChips activeFilter={activeFilter} setActiveFilter={handleFilterChange} />
-            
-            {loading ? (
-              <View style={styles.loadingContainer}>
-                <Text>Loading...</Text>
-              </View>
-            ) : filteredRestaurants.length === 0 ? (
-              <View style={styles.emptyState}>
-                <AntDesign name="creditcard" size={48} color={COLORS.primary} style={styles.emptyIcon} />
-                <CustomText variant="body" weight="medium" fontFamily="figtree" style={styles.emptyText}>
-                  No punch cards found
-                </CustomText>
-                <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.emptySubtext}>
-                  {searchQuery ? 'Try adjusting your search' : 'Start earning punches at local businesses'}
-                </CustomText>
-              </View>
-            ) : (
-              <FlatList
-                ref={flatListRef}
-                data={filteredRestaurants}
-                keyExtractor={(item) => item.id}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.cardsList}
-                snapToInterval={CARD_WIDTH + CARD_SPACING}
-                decelerationRate="fast"
-                snapToAlignment="center"
-                onViewableItemsChanged={onViewableItemsChanged}
-                viewabilityConfig={{ viewAreaCoveragePercentThreshold: 50 }}
-                getItemLayout={(data, index) => ({
-                  length: CARD_WIDTH + CARD_SPACING,
-                  offset: (CARD_WIDTH + CARD_SPACING) * index,
-                  index,
-                })}
-                renderItem={({ item, index }) => (
-                  <View style={styles.cardWrapper}>
-                    <CreditCardPunchCard 
-                      card={item} 
-                      isFocused={index === currentCardIndex}
-                      isShaking={shakingCards.has(item.id)}
-                      onPress={() => handleCardPress(item)}
-                      onLongPress={() => handleCardLongPress(item)}
-                      onDeletePress={() => handleDeleteButtonPress(item)}
+          {/* Punch Cards Section - Hidden for Business Accounts */}
+          {!isBusiness && (
+            <View style={styles.punchCardSection}>
+              <View style={styles.punchCardHeader}>
+                {!searchVisible && (
+                  <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.punchCardTitle}>
+                    Punch Cards ({filteredRestaurants.length})
+                  </CustomText>
+                )}
+                
+                {/* Search Bar - Full width overlay */}
+                {searchVisible && (
+                  <Animated.View 
+                    style={[
+                      styles.fullWidthSearchContainer,
+                      {
+                        transform: [{ translateX: searchAnimation }]
+                      }
+                    ]}
+                  >
+                    <AnimatedSearchOverlay 
+                      visible={searchVisible} 
+                      onSearch={handleSearch} 
+                      onClose={handleSearchClose}
                     />
+                  </Animated.View>
+                )}
+                
+                <TouchableOpacity style={styles.searchIconButton} onPress={handleSearchToggle}>
+                  <AntDesign name={searchVisible ? "close" : "search1"} size={20} color={COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Filter Chips */}
+              <FilterChips activeFilter={activeFilter} setActiveFilter={handleFilterChange} />
+              
+              {loading ? (
+                <View style={styles.loadingContainer}>
+                  <Text>Loading...</Text>
+                </View>
+              ) : filteredRestaurants.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <AntDesign name="creditcard" size={48} color={COLORS.primary} style={styles.emptyIcon} />
+                  <CustomText variant="body" weight="medium" fontFamily="figtree" style={styles.emptyText}>
+                    No punch cards found
+                  </CustomText>
+                  <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.emptySubtext}>
+                    {searchQuery ? 'Try adjusting your search' : 'Start earning punches at local businesses'}
+                  </CustomText>
+                </View>
+              ) : (
+                <FlatList
+                  ref={flatListRef}
+                  data={filteredRestaurants}
+                  keyExtractor={(item) => item.id}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.cardsList}
+                  snapToInterval={CARD_WIDTH + CARD_SPACING}
+                  decelerationRate="fast"
+                  snapToAlignment="center"
+                  onViewableItemsChanged={onViewableItemsChanged}
+                  viewabilityConfig={{ viewAreaCoveragePercentThreshold: 50 }}
+                  getItemLayout={(data, index) => ({
+                    length: CARD_WIDTH + CARD_SPACING,
+                    offset: (CARD_WIDTH + CARD_SPACING) * index,
+                    index,
+                  })}
+                  renderItem={({ item, index }) => (
+                    <View style={styles.cardWrapper}>
+                      <CreditCardPunchCard 
+                        card={item} 
+                        isFocused={index === currentCardIndex}
+                        isShaking={shakingCards.has(item.id)}
+                        onPress={() => handleCardPress(item)}
+                        onLongPress={() => handleCardLongPress(item)}
+                        onDeletePress={() => handleDeleteButtonPress(item)}
+                      />
+                    </View>
+                  )}
+                />
+              )}
+            </View>
+          )}
+
+          {/* Promotions/Rewards Section for Business Accounts */}
+          {isBusiness && (
+            <View style={styles.promotionsCard}>
+              <View style={styles.sectionHeader}>
+                <CustomText variant="subtitle" weight="bold" fontFamily="figtree" style={styles.sectionTitle}>
+                  Promotions & Rewards
+                </CustomText>
+              </View>
+              
+              <View style={styles.promotionsList}>
+                {currentPromotions.length > 0 ? (
+                  <>
+                    {currentPromotions.map((promotion, index) => (
+                      <View key={index} style={styles.promotionItem}>
+                        <View style={styles.promotionHeader}>
+                          <AntDesign name="gift" size={20} color={COLORS.primary} />
+                          <CustomText variant="body" weight="medium" fontFamily="figtree" style={styles.promotionTitle}>
+                            {promotion.title}
+                          </CustomText>
+                          <View style={styles.promotionActions}>
+                            <TouchableOpacity 
+                              style={styles.promotionEditButton}
+                              onPress={() => handleEditPromotion(promotion)}
+                            >
+                              <AntDesign name="edit" size={14} color={COLORS.primary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                              style={styles.promotionDeleteButton}
+                              onPress={() => handleDeletePromotion(promotion.id)}
+                            >
+                              <AntDesign name="delete" size={14} color="#E74C3C" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                        <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.promotionDescription}>
+                          {promotion.description}
+                        </CustomText>
+                        <View style={styles.promotionDetails}>
+                          <View style={styles.promotionDetail}>
+                            <AntDesign name="star" size={12} color={COLORS.text.secondary} />
+                            <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.promotionDetailText}>
+                              {promotion.requiredPunches} punches required
+                            </CustomText>
+                          </View>
+                          <View style={styles.promotionDetail}>
+                            <AntDesign name="gift" size={12} color={COLORS.text.secondary} />
+                            <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.promotionDetailText}>
+                              {promotion.rewardType}
+                            </CustomText>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                    <TouchableOpacity 
+                      style={styles.addPromotionButton}
+                      onPress={() => router.push('/screens/promotions')}
+                    >
+                      <AntDesign name="plus" size={16} color={COLORS.primary} />
+                      <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.addPromotionButtonText}>
+                        Create Another Promotion
+                      </CustomText>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <View style={styles.emptyPromotionsState}>
+                    <AntDesign name="gift" size={48} color={COLORS.text.light} />
+                    <CustomText variant="body" weight="medium" fontFamily="figtree" style={styles.emptyPromotionsText}>
+                      No promotions yet
+                    </CustomText>
+                    <CustomText variant="caption" weight="normal" fontFamily="figtree" style={styles.emptyPromotionsSubtext}>
+                      Create your first promotion to attract customers
+                    </CustomText>
+                    <TouchableOpacity 
+                      style={styles.createFirstPromotionButton}
+                      onPress={() => router.push('/screens/promotions')}
+                    >
+                      <CustomText variant="button" weight="bold" fontFamily="figtree" style={styles.createFirstPromotionButtonText}>
+                        Create Promotion
+                      </CustomText>
+                    </TouchableOpacity>
                   </View>
                 )}
-              />
-            )}
-          </View>
+              </View>
+            </View>
+          )}
 
           {/* Transaction History Section */}
           <View style={styles.recentActivityCard}>
@@ -1029,6 +1184,8 @@ export default function Wallet() {
         likedRestaurants={liked}
         onLikeUpdate={toggleLike}
       />
+
+
     </View>
   );
 }

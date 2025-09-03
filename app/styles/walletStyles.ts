@@ -40,6 +40,7 @@ export default StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background.primary,
+    paddingBottom: 20, // Reduced padding
   },
   safeArea: {
     flex: 1,
@@ -621,5 +622,279 @@ export default StyleSheet.create({
   // Delete mode touchable style
   deleteModeTouchable: {
     flex: 1,
+  },
+  // Promotions section styles
+  promotionsCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    marginHorizontal: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  addPromotionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 4,
+  },
+  addPromotionText: {
+    color: COLORS.info,
+    fontSize: 12,
+  },
+  promotionsList: {
+    marginTop: 16,
+  },
+  promotionItem: {
+    backgroundColor: 'rgba(248, 249, 250, 0.8)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  promotionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  promotionTitle: {
+    flex: 1,
+    marginLeft: 8,
+    color: COLORS.primary,
+  },
+  promotionEditButton: {
+    padding: 4,
+  },
+  promotionDescription: {
+    color: COLORS.text.secondary,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  promotionDetails: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  promotionDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  promotionDetailText: {
+    color: COLORS.text.secondary,
+    fontSize: 12,
+  },
+  emptyPromotionsState: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  emptyPromotionsText: {
+    color: COLORS.text.secondary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyPromotionsSubtext: {
+    color: COLORS.text.light,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  createFirstPromotionButton: {
+    backgroundColor: COLORS.info,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  createFirstPromotionButtonText: {
+    color: 'white',
+    fontSize: 14,
+  },
+  // Modal and form styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  promotionsModal: {
+    width: '90%',
+    height: '80%',
+    backgroundColor: 'white',
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  modalTitle: {
+    color: COLORS.primary,
+    fontSize: 18,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  promotionsForm: {
+    flex: 1,
+    padding: 20,
+  },
+  formSection: {
+    marginBottom: 20,
+  },
+  formLabel: {
+    color: COLORS.primary,
+    marginBottom: 8,
+    fontSize: 16,
+  },
+  formInput: {
+    borderWidth: 1,
+    borderColor: COLORS.text.light,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+  },
+  formTextArea: {
+    borderWidth: 1,
+    borderColor: COLORS.text.light,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  rewardTypeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  rewardTypeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.text.light,
+    backgroundColor: 'white',
+  },
+  rewardTypeButtonActive: {
+    backgroundColor: COLORS.info,
+    borderColor: COLORS.info,
+  },
+  rewardTypeButtonText: {
+    color: COLORS.text.secondary,
+    fontSize: 14,
+  },
+  rewardTypeButtonTextActive: {
+    color: 'white',
+    fontSize: 14,
+  },
+  datePickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  datePickerButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: COLORS.text.light,
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: 'white',
+  },
+  clearDateButton: {
+    padding: 8,
+    borderRadius: 16,
+    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  datePickerButtonText: {
+    color: COLORS.text.primary,
+    fontSize: 16,
+  },
+  formActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.text.light,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: COLORS.text.secondary,
+    fontSize: 16,
+  },
+  saveButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: COLORS.info,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    color: 'white',
+    fontSize: 16,
+  },
+  promotionActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  promotionDeleteButton: {
+    padding: 4,
+  },
+  // iOS Date Picker styles
+  iosDatePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  iosDatePickerContainer: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
+  },
+  iosDatePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  iosDatePickerTitle: {
+    color: COLORS.primary,
+    fontSize: 16,
+  },
+  iosDatePickerButton: {
+    color: COLORS.info,
+    fontSize: 16,
+  },
+  iosDatePicker: {
+    backgroundColor: 'white',
   },
 });

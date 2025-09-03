@@ -8,6 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { auth, db } from '../../firebase/config';
 import { setDoc, doc, query, collection, where, getDocs } from 'firebase/firestore';
 import { pickProfilePicture, uploadProfilePicture } from '../../utils/profilePictureUtils';
+import { sanitizeImageUri } from '../../utils/urlUtils';
 import AccountTypeSelection from '../components/AccountTypeSelection';
 import SignupForm from '../components/SignupForm';
 import SignupNavigation from '../components/SignupNavigation';
@@ -662,8 +663,15 @@ export default function SignupScreen() {
               const fileName = `photo_${index + 1}.jpg`;
               const storageRef = ref(storage, `business-content/${form.businessName}/${fileName}`);
               
+              // Sanitize the image URI to ensure it's secure
+              const secureUri = sanitizeImageUri(pictureUri);
+              if (!secureUri) {
+                console.error('Invalid or insecure image URI:', pictureUri);
+                throw new Error(`Invalid or insecure image URI: ${pictureUri}`);
+              }
+              
               // Convert URI to blob
-              const response = await fetch(pictureUri);
+              const response = await fetch(secureUri);
               const blob = await response.blob();
               
               console.log(`Photo ${index + 1} blob size:`, blob.size, 'bytes');

@@ -6,7 +6,7 @@ const homeStyles = StyleSheet.create({
       backgroundColor: '#fff',
       paddingHorizontal: 20,
       paddingTop: 64, // match Discover page top spacing
-      paddingBottom: 40, // add or increase this value
+      paddingBottom: 20, // Reduced padding
     },
     greeting: {
       fontSize: 24,
