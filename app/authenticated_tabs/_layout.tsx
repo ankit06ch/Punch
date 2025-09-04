@@ -168,30 +168,22 @@ export default function TabsLayout() {
       />
       </Tabs>
       
-              {/* White gradient background behind navigation bar */}
-        <Animated.View style={{ opacity: gradientOpacity }}>
-          <LinearGradient
-            colors={activeTab === 'discover' 
-              ? ['transparent', 'rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.4)', 'rgba(255, 255, 255, 0.7)', 'rgba(255, 255, 255, 0.9)', 'white', 'white', 'white']
-              : ['rgba(255, 255, 255, 0.2)', 'rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.7)', 'rgba(255, 255, 255, 0.85)', 'rgba(255, 255, 255, 0.95)', 'white', 'white', 'white', 'white']
-            }
-            locations={activeTab === 'discover' 
-              ? [0, 0.15, 0.3, 0.5, 0.7, 0.85, 0.95, 0.98, 1]
-              : [0, 0.1, 0.25, 0.45, 0.65, 0.8, 0.9, 0.95, 1]
-            }
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: activeTab === 'discover' 
-              ? Math.max(200, insets.bottom + 180) // Higher for seamless blend on discover
-              : Math.max(120, insets.bottom + 100), // Lower for stronger gradient on other pages
-          }}
-          pointerEvents="none"
-          />
-        </Animated.View>
+
       
+      {/* White gradient behind navigation bar */}
+      <LinearGradient
+        colors={['transparent', 'rgba(255, 255, 255, 0.2)', 'rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.8)', 'white', 'white']}
+        locations={[0, 0.2, 0.4, 0.6, 0.8, 1]}
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: Math.max(120, insets.bottom + 100),
+          zIndex: 1,
+        }}
+      />
+
       {/* Shadow container for navigation bar */}
       <View style={{
         position: 'absolute',
@@ -206,6 +198,7 @@ export default function TabsLayout() {
         shadowOffset: { width: 0, height: 8 },
         shadowRadius: 20,
         backgroundColor: 'transparent',
+        zIndex: 2,
       }}>
         {/* Custom pill-shaped navigation bar */}
         <View style={{

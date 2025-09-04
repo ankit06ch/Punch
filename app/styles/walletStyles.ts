@@ -50,7 +50,7 @@ export default StyleSheet.create({
   },
   scrollContent: {
     paddingTop: 60,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   fixedGlassHeader: {
     position: 'absolute',

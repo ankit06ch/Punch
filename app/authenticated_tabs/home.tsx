@@ -1163,7 +1163,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: 20,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   logoContainer: {
     position: 'absolute',

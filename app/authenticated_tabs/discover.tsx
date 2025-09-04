@@ -14,6 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
+import { useDarkMode } from '../../contexts/DarkModeContext';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -1196,9 +1197,7 @@ export default function Discover() {
                  style={[
                    styles.tab, 
                    activeTab === 'explore' && styles.activeTab,
-                   activeTab === 'explore' && {
-                     backgroundColor: isLightBackground ? 'rgba(44, 62, 80, 0.1)' : 'rgba(255, 255, 255, 0.2)'
-                   }
+
                  ]}
                  onPress={() => setActiveTab('explore')}
                >
@@ -1212,9 +1211,7 @@ export default function Discover() {
                  style={[
                    styles.tab, 
                    activeTab === 'nearby' && styles.activeTab,
-                   activeTab === 'nearby' && {
-                     backgroundColor: isLightBackground ? 'rgba(44, 62, 80, 0.1)' : 'rgba(255, 255, 255, 0.2)'
-                   }
+
                  ]}
                  onPress={() => setActiveTab('nearby')}
                >
@@ -1228,9 +1225,7 @@ export default function Discover() {
                  style={[
                    styles.tab, 
                    activeTab === 'promotion' && styles.activeTab,
-                   activeTab === 'promotion' && {
-                     backgroundColor: isLightBackground ? 'rgba(44, 62, 80, 0.1)' : 'rgba(255, 255, 255, 0.2)'
-                   }
+
                  ]}
                  onPress={() => setActiveTab('promotion')}
                >
@@ -1416,7 +1411,8 @@ export default function Discover() {
                
                {/* Dark Gradient Overlay */}
                <LinearGradient
-                 colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.8)']}
+                 colors={['transparent', 'transparent', 'transparent', 'transparent', 'rgba(0,0,0,0.01)', 'rgba(0,0,0,0.03)', 'rgba(0,0,0,0.08)', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.8)']}
+                 locations={[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.65, 0.8, 0.9, 1]}
                  style={styles.cardGradientOverlay}
                />
                
@@ -1450,6 +1446,7 @@ export default function Discover() {
                        <Text style={styles.cardTagText}>{restaurant.distance || '0.5 mi'}</Text>
                      </View>
                    </TouchableOpacity>
+                   <Text style={styles.tagSeparator}>,</Text>
                    <TouchableOpacity onPress={() => handleRestaurantPress(restaurant)}>
                      <View style={styles.cardTag}>
                        <Text style={styles.cardTagText}>
@@ -1471,6 +1468,7 @@ export default function Discover() {
                        </Text>
                      </View>
                    </TouchableOpacity>
+                   <Text style={styles.tagSeparator}>,</Text>
                    <TouchableOpacity onPress={() => handleRestaurantPress(restaurant)}>
                      <View style={styles.cardTag}>
                        <Text style={styles.cardTagText}>{getPriceLevel(restaurant.price)}</Text>
@@ -1482,28 +1480,15 @@ export default function Discover() {
                        : (typeof restaurant.cuisine === 'string' 
                           ? restaurant.cuisine.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0)
                           : []);
-                     
                      if (cuisineArray.length > 0) {
-                       const maxVisibleTags = 2; // Show maximum 2 cuisine tags
-                       const visibleCuisines = cuisineArray.slice(0, maxVisibleTags);
-                       const hasMoreCuisines = cuisineArray.length > maxVisibleTags;
-                       
                        return (
                          <>
-                           {visibleCuisines.map((cuisine, index) => (
-                             <TouchableOpacity key={index} onPress={() => handleRestaurantPress(restaurant)}>
-                               <View style={styles.cardTag}>
-                                 <Text style={styles.cardTagText}>{cuisine}</Text>
-                               </View>
-                             </TouchableOpacity>
-                           ))}
-                           {hasMoreCuisines && (
-                             <TouchableOpacity onPress={() => handleRestaurantPress(restaurant)}>
-                               <View style={styles.seeMoreTag}>
-                                 <Text style={styles.seeMoreTagText}>see more</Text>
-                               </View>
-                             </TouchableOpacity>
-                           )}
+                           <Text style={styles.tagSeparator}>,</Text>
+                           <TouchableOpacity onPress={() => handleRestaurantPress(restaurant)}>
+                             <View style={styles.cardTag}>
+                               <Text style={styles.cardTagText}>{cuisineArray.join(', ')}</Text>
+                             </View>
+                           </TouchableOpacity>
                          </>
                        );
                      }
@@ -2241,13 +2226,13 @@ const styles = StyleSheet.create({
      height: '100%',
      resizeMode: 'cover', // Force cover mode to maintain aspect ratio
    },
-   cardGradientOverlay: {
-     position: 'absolute',
-     bottom: 0,
-     left: 0,
-     right: 0,
-     height: '50%',
-   },
+     cardGradientOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
    cardInfo: {
      position: 'absolute',
      bottom: 80, // Above navigation bar with proper spacing
@@ -2301,22 +2286,6 @@ const styles = StyleSheet.create({
      fontSize: 14,
      fontWeight: '600',
      textShadowColor: 'rgba(0,0,0,0.5)',
-     textShadowOffset: { width: 0, height: 1 },
-     textShadowRadius: 2,
-   },
-   seeMoreTag: {
-     backgroundColor: 'rgba(251, 122, 32, 0.9)', // Orange background
-     paddingHorizontal: 12,
-     paddingVertical: 6,
-     borderRadius: 16,
-     borderWidth: 1,
-     borderColor: 'rgba(251, 122, 32, 1)', // Solid orange border
-   },
-   seeMoreTagText: {
-     color: '#fff',
-     fontSize: 14,
-     fontWeight: '700', // Bolder than regular tags
-     textShadowColor: 'rgba(0,0,0,0.3)',
      textShadowOffset: { width: 0, height: 1 },
      textShadowRadius: 2,
    },

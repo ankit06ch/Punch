@@ -11,7 +11,6 @@ import { PanResponder } from 'react-native';
 import RestaurantModal from '../../components/RestaurantModal';
 import EditableRestaurantModal from '../../components/EditableRestaurantModal';
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
 import { pickProfilePicture, uploadProfilePicture, deleteProfilePicture } from '../../utils/profilePictureUtils';
 import {
   useFonts,
@@ -172,7 +171,6 @@ export default function Profile() {
   ).current;
   const [selectedProfileTab, setSelectedProfileTab] = useState<'liked' | 'rewards'>('liked');
   const [likedRestaurantsWithNames, setLikedRestaurantsWithNames] = useState<any[]>([]);
-  const [loadingLikedRestaurants, setLoadingLikedRestaurants] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
   const [restaurantModalVisible, setRestaurantModalVisible] = useState(false);
@@ -531,11 +529,9 @@ export default function Profile() {
     if (likedRestaurantIds.length === 0) {
       setLikedRestaurantsWithNames([]);
       setLiked([]);
-      setLoadingLikedRestaurants(false);
       return;
     }
     
-    setLoadingLikedRestaurants(true);
     const restaurantsWithNames = [];
     for (const restaurantId of likedRestaurantIds) {
       try {
@@ -569,7 +565,6 @@ export default function Profile() {
     }
     setLikedRestaurantsWithNames(restaurantsWithNames);
     setLiked(likedRestaurantIds);
-    setLoadingLikedRestaurants(false);
   };
 
   // Expose a reusable fetch function for refreshers and other effects
@@ -1429,23 +1424,7 @@ export default function Profile() {
         {/* Liked Restaurants Section */}
         {selectedProfileTab === 'liked' && (
           <View style={{ width: '100%', marginTop: 8 }}>
-            {loadingLikedRestaurants ? (
-              <View style={{
-                alignItems: 'center',
-                justifyContent: 'center',
-                paddingVertical: 40,
-                paddingHorizontal: 20,
-              }}>
-                <ActivityIndicator size="large" color="#fb7a20" />
-                <Text style={{
-                  color: '#7F8C8D',
-                  fontSize: 16,
-                  textAlign: 'center',
-                  marginTop: 16,
-                  fontFamily: 'Figtree_500Medium',
-                }}>Punching in your cravings…</Text>
-              </View>
-            ) : likedRestaurantsWithNames.length > 0 ? (
+            {likedRestaurantsWithNames.length > 0 ? (
               likedRestaurantsWithNames.map((restaurant: any, idx: number) => (
                 <TouchableOpacity 
                   key={restaurant.id || idx} 
@@ -1996,18 +1975,6 @@ export default function Profile() {
               />
               )}
             </View>
-            {/* White gradient overlay from bottom */}
-            <LinearGradient
-              colors={['transparent', 'rgba(255, 255, 255, 0.3)', 'rgba(255, 255, 255, 0.6)']}
-              style={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: 60,
-                pointerEvents: 'none',
-              }}
-            />
           </Animated.View>
         </TouchableOpacity>
       </Modal>
@@ -2326,6 +2293,11 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 40,
     maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
   },
   modalHandle: {
     width: 40,
@@ -2364,6 +2336,11 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 40,
     maxHeight: '60%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
   },
   messagesContent: {
     flex: 1,
